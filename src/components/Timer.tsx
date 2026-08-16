@@ -7,7 +7,11 @@ import { Play, Square, BookOpen, Hash } from "lucide-react";
 declare var chrome: any;
 const EXTENSION_ID = "hoifgabjleobfmdobgjcojplpemamjom";
 
-export default function TapasyaTimer() {
+export default function TapasyaTimer({
+  onTimerStateChange,
+}: {
+  onTimerStateChange?: (isActive: boolean) => void;
+}) {
   const [subject, setSubject] = useState("");
   const [chapter, setChapter] = useState("");
   const [isActive, setIsActive] = useState(false);
@@ -38,6 +42,7 @@ export default function TapasyaTimer() {
     }
     setStartTime(Date.now());
     setIsActive(true);
+    if (onTimerStateChange) onTimerStateChange(true);
 
     if (typeof chrome !== "undefined" && chrome.runtime) {
       chrome.runtime.sendMessage(
@@ -52,6 +57,7 @@ export default function TapasyaTimer() {
 
   const endTapasya = async () => {
     setIsActive(false);
+    if (onTimerStateChange) onTimerStateChange(false);
 
     if (typeof chrome !== "undefined" && chrome.runtime) {
       chrome.runtime.sendMessage(
