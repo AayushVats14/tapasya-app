@@ -26,7 +26,8 @@ export default function Auth() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: typeof window !== "undefined" ? window.location.origin : "",
+        // Updated to route users directly to the workspace
+        redirectTo: typeof window !== "undefined" ? `${window.location.origin}/focus` : "",
       },
     });
   };
