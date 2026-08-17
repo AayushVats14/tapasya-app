@@ -13,7 +13,7 @@ export default function LandingPage() {
   useEffect(() => {
     // If they are already logged in, push them straight to setup
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) router.push("/setup");
+      if (session) router.push("/community");
       setCheckingAuth(false);
     });
   }, [router]);
