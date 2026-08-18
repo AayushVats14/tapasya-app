@@ -2,34 +2,34 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { Users, Plus, Search } from "lucide-react"; // <-- Added Search icon
+import { Users, Plus, Search } from "lucide-react";
 
-export default function ExploreSquads({ userId }: { userId: string }) {
+// 1. Accept onJoinSuccess as a prop
+export default function ExploreSquads({ userId, onJoinSuccess }: { userId: string; onJoinSuccess?: () => void }) {
   const [squads, setSquads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState(""); // <-- Added state for search
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const fetchOpenSquads = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("groups")
+      .select(`*, group_members (count)`)
+      .eq("is_public", true);
+
+    if (error) {
+      console.error("Failed to fetch squads", error);
+    } else if (data) {
+      const available = data.filter((squad) => {
+        const currentMembers = squad.group_members[0]?.count || 0;
+        return currentMembers < squad.max_members;
+      });
+      setSquads(available);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const fetchOpenSquads = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("groups")
-        .select(`*, group_members (count)`)
-        .eq("is_public", true);
-
-      if (error) {
-        console.error("Failed to fetch squads", error);
-      } else if (data) {
-        // Filter out full squads
-        const available = data.filter((squad) => {
-          const currentMembers = squad.group_members[0]?.count || 0;
-          return currentMembers < squad.max_members;
-        });
-        setSquads(available);
-      }
-      setLoading(false);
-    };
-
     fetchOpenSquads();
   }, []);
 
@@ -56,10 +56,19 @@ export default function ExploreSquads({ userId }: { userId: string }) {
       }
     } else {
       alert("Welcome to the squad! 🔥");
+      
+      // 2. Also update their legacy group_id field if your app uses it for quick lookups
+      await supabase
+        .from("aspirants")
+        .update({ group_id: groupId })
+        .eq("id", userId);
+
+      // 3. Trigger the refresh callback!
+      if (onJoinSuccess) onJoinSuccess();
+      fetchOpenSquads();
     }
   };
 
-  // <-- Real-time filtering logic
   const filteredSquads = squads.filter((squad) => 
     (squad.name || "Unnamed Squad").toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -68,8 +77,6 @@ export default function ExploreSquads({ userId }: { userId: string }) {
 
   return (
     <div className="w-full space-y-6">
-      
-      {/* Header and Search Bar */}
       <div className="flex flex-col gap-4">
         <h3 className="text-lg font-semibold text-white">Discover Squads</h3>
         
@@ -82,17 +89,14 @@ export default function ExploreSquads({ userId }: { userId: string }) {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search squads by name..."
-            className="w-full pl-10 pr-4 py-2.5 bg-zinc-900/50 border border-white/5 rounded-xl text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-white/10 focus:ring-1 focus:ring-white/10 transition-all"
+            className="w-full pl-10 pr-4 py-2.5 bg-zinc-900/50 border border-white/5 rounded-xl text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-white/10 transition-all"
           />
         </div>
       </div>
       
-      {/* Results Grid */}
       {filteredSquads.length === 0 ? (
         <p className="text-zinc-500 text-sm">
-          {searchQuery 
-            ? "No squads found matching your search." 
-            : "No open squads found. Be the first to create one!"}
+          {searchQuery ? "No squads found matching your search." : "No open squads found."}
         </p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -111,6 +115,7 @@ export default function ExploreSquads({ userId }: { userId: string }) {
                 <button 
                   onClick={() => joinSquad(squad.id, squad.max_members)}
                   className="p-2 bg-zinc-800 text-zinc-300 rounded-full hover:bg-white hover:text-zinc-900 transition-all"
+                  title="Join Squad"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
