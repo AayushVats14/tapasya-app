@@ -147,35 +147,29 @@ export default function SquadManager({ userId, refreshKey }: { userId: string; r
 
   // Load chat & subscribe to real-time messages
   const loadSquadChat = async (groupId: string) => {
-    // 1. Fetch initial messages
-    const { data } = await supabase
+    // 1. Fetch initial messages directly from squad_messages table
+    const { data, error } = await supabase
       .from("squad_messages")
-      .select(`*, aspirants(display_name)`)
+      .select("*")
       .eq("group_id", groupId)
       .order("created_at", { ascending: true })
       .limit(50);
 
-    setMessages(data || []);
+    if (!error) {
+      setMessages(data || []);
+    } else {
+      console.error("Error loading chat:", error.message);
+    }
 
-    // 2. Setup Supabase Realtime Subscription strictly in order: .on() then .subscribe()
-    const channel = supabase.channel(`squad-chat-${groupId}`);
+    // 2. Setup Supabase Realtime Subscription safely
+    const channelName = `squad-chat-${groupId}-${Date.now()}`;
+    const channel = supabase.channel(channelName);
 
     channel.on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'squad_messages', filter: `group_id=eq.${groupId}` },
-      async (payload) => {
-        const { data: sender } = await supabase
-          .from("aspirants")
-          .select("display_name")
-          .eq("id", payload.new.user_id)
-          .single();
-
-        const incomingMessage = {
-          ...payload.new,
-          aspirants: sender || { display_name: "Aspirant" }
-        };
-
-        setMessages((prev) => [...prev, incomingMessage as ChatMessage]);
+      (payload) => {
+        setMessages((prev) => [...prev, payload.new as ChatMessage]);
       }
     );
 
@@ -185,7 +179,6 @@ export default function SquadManager({ userId, refreshKey }: { userId: string; r
       supabase.removeChannel(channel);
     };
   };
-
   // Scroll chat to bottom on new messages
   useEffect(() => {
     if (chatScrollRef.current) {
