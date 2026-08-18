@@ -113,22 +113,33 @@ export default function SquadManager({ userId, refreshKey }: { userId: string; r
     // 1. Fetch initial messages
     const { data } = await supabase
       .from("squad_messages")
-      .select(`*`)
+      .select(`*, aspirants(display_name)`)
       .eq("group_id", groupId)
       .order("created_at", { ascending: true })
       .limit(50);
 
     setMessages(data || []);
 
-    // 2. Setup Supabase Realtime Channel cleanly
+    // 2. Setup Supabase Realtime Subscription correctly
     const channel = supabase.channel(`squad-chat-${groupId}`);
 
     channel
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'squad_messages', filter: `group_id=eq.${groupId}` },
-        (payload) => {
-          setMessages((prev) => [...prev, payload.new as ChatMessage]);
+        async (payload) => {
+          const { data: sender } = await supabase
+            .from("aspirants")
+            .select("display_name")
+            .eq("id", payload.new.user_id)
+            .single();
+
+          const incomingMessage = {
+            ...payload.new,
+            aspirants: sender || { display_name: "Aspirant" }
+          };
+
+          setMessages((prev) => [...prev, incomingMessage as ChatMessage]);
         }
       )
       .subscribe();
