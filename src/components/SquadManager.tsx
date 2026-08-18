@@ -15,7 +15,7 @@ interface ChatMessage {
   user_id: string;
   message: string;
   created_at: string;
-  aspirants?: { display_name: string };
+  display_name?: string;
 }
 
 export default function SquadManager({ userId, refreshKey }: { userId: string; refreshKey: number }) {
@@ -92,7 +92,26 @@ export default function SquadManager({ userId, refreshKey }: { userId: string; r
     };
   }, [userId]);
 
-  // Open squad modal and load data
+  // Realtime listener for session updates when a squad modal is open
+  useEffect(() => {
+    if (!selectedSquad) return;
+
+    const sessionChannel = supabase
+      .channel(`squad-sessions-${selectedSquad.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'sessions' },
+        () => {
+          loadSquadProgress(selectedSquad.id);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(sessionChannel);
+    };
+  }, [selectedSquad]);
+
   const openSquadModal = async (squad: any) => {
     setSelectedSquad(squad);
     setActiveModalTab("progress");
@@ -100,7 +119,7 @@ export default function SquadManager({ userId, refreshKey }: { userId: string; r
     loadSquadChat(squad.id);
   };
 
-  // Load progress
+  // Load progress with robust local day handling
   const loadSquadProgress = async (groupId: string) => {
     setLoadingProgress(true);
     const { data: members, error: memError } = await supabase
@@ -121,14 +140,19 @@ export default function SquadManager({ userId, refreshKey }: { userId: string; r
       .select("id, display_name")
       .in("id", memberIds);
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    // Get exact local start of day timestamp to avoid UTC filtering issues
+    const now = new Date();
+    const startOfDayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-    const { data: sessions } = await supabase
+    const { data: sessions, error: sessError } = await supabase
       .from("sessions")
-      .select("user_id, duration_seconds")
+      .select("user_id, duration_seconds, created_at")
       .in("user_id", memberIds)
-      .gte("created_at", startOfDay.toISOString());
+      .gte("created_at", startOfDayLocal);
+
+    if (sessError) {
+      console.error("Error loading sessions progress:", sessError.message);
+    }
 
     const progressMap: Record<string, number> = {};
     sessions?.forEach((s: any) => {
@@ -147,7 +171,6 @@ export default function SquadManager({ userId, refreshKey }: { userId: string; r
 
   // Load chat & subscribe to real-time messages
   const loadSquadChat = async (groupId: string) => {
-    // 1. Fetch initial messages directly from squad_messages table
     const { data, error } = await supabase
       .from("squad_messages")
       .select("*")
@@ -161,7 +184,6 @@ export default function SquadManager({ userId, refreshKey }: { userId: string; r
       console.error("Error loading chat:", error.message);
     }
 
-    // 2. Setup Supabase Realtime Subscription safely
     const channelName = `squad-chat-${groupId}-${Date.now()}`;
     const channel = supabase.channel(channelName);
 
@@ -179,6 +201,7 @@ export default function SquadManager({ userId, refreshKey }: { userId: string; r
       supabase.removeChannel(channel);
     };
   };
+
   // Scroll chat to bottom on new messages
   useEffect(() => {
     if (chatScrollRef.current) {
@@ -472,7 +495,7 @@ export default function SquadManager({ userId, refreshKey }: { userId: string; r
                       return (
                         <div key={msg.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
                           <span className="text-[10px] text-zinc-500 mb-1 px-1">
-                            {isMe ? "You" : msg.aspirants?.display_name || "Aspirant"}
+                            {isMe ? "You" : msg.display_name || "Aspirant"}
                           </span>
                           <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-xs font-light ${isMe ? "bg-orange-500 text-zinc-950 font-medium rounded-br-none" : "bg-zinc-900 text-zinc-200 border border-white/5 rounded-bl-none"}`}>
                             {msg.message}

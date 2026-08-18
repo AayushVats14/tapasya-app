@@ -15,7 +15,7 @@ export default function TapasyaTimer({ userId, subject = "", topic = "", onToggl
   const [seconds, setSeconds] = useState(0);
   const [isActive, setIsActive] = useState(false);
   
-  // 25 minutes default session target for the ring progress (can scale or loop)
+  // 25 minutes default session target for the ring progress
   const totalTime = 25 * 60; 
 
   useEffect(() => {
@@ -30,24 +30,17 @@ export default function TapasyaTimer({ userId, subject = "", topic = "", onToggl
 
   const toggleTimer = async () => {
     if (!isActive) {
-      // Trying to start
-      if (subject && !subject.trim()) {
-        alert("Please enter a Subject before starting deep work!");
-        return;
-      }
       setIsActive(true);
       if (onToggleZen) onToggleZen(true); // Trigger Zen Mode
     } else {
-      // Stopping the timer
       setIsActive(false);
       if (onToggleZen) onToggleZen(false); // Exit Zen Mode
 
-      if (seconds > 60 && userId) { // Only log if they studied for more than 1 minute and userId exists
-        const { error } = await supabase.from("study_sessions").insert({
+      if (seconds > 60 && userId) {
+        const { error } = await supabase.from("sessions").insert({
           user_id: userId,
-          subject: subject || "Deep Work",
-          topic: topic || "Focus Session",
           duration_seconds: seconds,
+          chapter: topic || "General Focus",
         });
 
         if (!error) {
@@ -60,7 +53,7 @@ export default function TapasyaTimer({ userId, subject = "", topic = "", onToggl
         alert("Session ended. (Needs to be over 1 minute to save to your history).");
       }
       
-      setSeconds(0); // Reset timer
+      setSeconds(0);
     }
   };
 

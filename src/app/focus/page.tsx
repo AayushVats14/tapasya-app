@@ -190,7 +190,7 @@ export default function FocusPage() {
           )}
 
           <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 hover:border-orange-500/20 transition-all duration-300 p-6 shadow-2xl flex flex-col items-center justify-center">
-            <TapasyaTimer onToggleZen={setIsZenMode} />
+            <TapasyaTimer userId={userId || undefined} onToggleZen={setIsZenMode} />
           </div>
 
           {!isZenMode && userId && <StudyCalendar userId={userId} />}
