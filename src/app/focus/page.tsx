@@ -24,7 +24,6 @@ export default function FocusPage() {
       }
       setUserId(user.id);
 
-      // Check if user has already set up a username in aspirants table
       const { data: profile } = await supabase
         .from("aspirants")
         .select("display_name")
@@ -34,7 +33,7 @@ export default function FocusPage() {
       if (profile?.display_name) {
         setUserName(profile.display_name);
       } else {
-        setUserName(null); // Triggers username setup modal
+        setUserName(null);
       }
       setCheckingUsername(false);
     });
@@ -54,9 +53,12 @@ export default function FocusPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 flex flex-col items-center justify-between p-4 sm:p-6 md:p-10 selection:bg-zinc-800">
+    <main className="min-h-screen bg-zinc-950 flex flex-col items-center justify-between p-4 sm:p-6 md:p-10 selection:bg-zinc-800 relative overflow-hidden">
       
-      {/* Username Setup Modal if no username exists */}
+      {/* Ambient Solar Orange Background Glows */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-orange-600/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-3/4 left-1/4 w-[400px] h-[400px] bg-amber-600/10 rounded-full blur-[120px] pointer-events-none" />
+
       {!userName && userId && (
         <UsernameSetup 
           userId={userId} 
@@ -72,7 +74,7 @@ export default function FocusPage() {
       )}
 
       {/* Top Navigation Bar */}
-      <nav className="w-full max-w-6xl flex justify-between items-center mb-6">
+      <nav className="w-full max-w-6xl flex justify-between items-center mb-6 relative z-10">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-zinc-400 text-sm font-light bg-zinc-900/50 px-3 py-1.5 rounded-full border border-white/5">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -97,31 +99,28 @@ export default function FocusPage() {
       </nav>
 
       {/* Two-Column Layout */}
-      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start my-auto">
+      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start my-auto relative z-10">
         
-        {/* Left Column Stack (Objective, Timer & Calendar) */}
         <div className="lg:col-span-7 flex flex-col gap-6">
-          <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 p-6 shadow-2xl">
+          <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 hover:border-orange-500/20 transition-all duration-300 p-6 shadow-2xl">
             <h2 className="text-lg font-light text-zinc-100 mb-0.5">What is your objective?</h2>
             <p className="text-zinc-500 text-xs mb-4">Define your micro-commitment before starting.</p>
             <Sankalp />
           </div>
 
-          <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 p-6 shadow-2xl flex flex-col items-center justify-center">
+          <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 hover:border-orange-500/20 transition-all duration-300 p-6 shadow-2xl flex flex-col items-center justify-center">
             <TapasyaTimer />
           </div>
 
-          {/* Monthly Study Heatmap Calendar Added Here */}
           {userId && <StudyCalendar userId={userId} />}
         </div>
 
-        {/* Right Column (Global Rankings) */}
         <div className="lg:col-span-5 flex flex-col">
           <Leaderboard />
         </div>
       </div>
 
-      <div className="w-full max-w-6xl flex justify-center items-center mt-6 text-zinc-600 text-xs font-light tracking-widest uppercase">
+      <div className="w-full max-w-6xl flex justify-center items-center mt-6 text-zinc-600 text-xs font-light tracking-widest uppercase relative z-10">
         Tapasya Deep Work Engine
       </div>
 
