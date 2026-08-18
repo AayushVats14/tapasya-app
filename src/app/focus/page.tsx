@@ -8,7 +8,7 @@ import TapasyaTimer from "../../components/Timer";
 import Sankalp from "../../components/Sankalp";
 import Leaderboard from "../../components/Leaderboard";
 import UsernameSetup from "../../components/UsernameSetup";
-import { Users, LogOut, Bell, Zap, X } from "lucide-react";
+import { Users, LogOut, Bell, Zap, X, Clock } from "lucide-react";
 
 interface NudgeNotification {
   id: string;
@@ -23,6 +23,7 @@ export default function FocusPage() {
   const [checkingUsername, setCheckingUsername] = useState(true);
   const [isZenMode, setIsZenMode] = useState(false);
   const [nudges, setNudges] = useState<NudgeNotification[]>([]);
+  const [todaySeconds, setTodaySeconds] = useState(0);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -44,14 +45,31 @@ export default function FocusPage() {
         setUserName(null);
       }
       setCheckingUsername(false);
+      fetchTodayProgress(user.id);
     });
   }, [router]);
+
+  // Fetch user's total study time for today
+  const fetchTodayProgress = async (currentUserId: string) => {
+    const now = new Date();
+    const startOfDayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+    const { data, error } = await supabase
+      .from("sessions")
+      .select("duration_seconds")
+      .eq("user_id", currentUserId)
+      .gte("created_at", startOfDayLocal);
+
+    if (!error && data) {
+      const total = data.reduce((acc, curr) => acc + (curr.duration_seconds || 0), 0);
+      setTodaySeconds(total);
+    }
+  };
 
   // Realtime Nudge Listener for the Workspace
   useEffect(() => {
     if (!userId) return;
 
-    // Fetch existing unread nudges if any
     const fetchNudges = async () => {
       const { data } = await supabase
         .from("squad_nudges")
@@ -81,7 +99,6 @@ export default function FocusPage() {
 
     fetchNudges();
 
-    // Setup realtime subscription for new incoming nudges
     const channel = supabase
       .channel(`workspace-nudges-${userId}`)
       .on(
@@ -118,6 +135,13 @@ export default function FocusPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push("/");
+  };
+
+  const formatTodayTime = (totalSecs: number) => {
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m} mins`;
   };
 
   if (checkingUsername) {
@@ -189,8 +213,19 @@ export default function FocusPage() {
             </div>
           )}
 
-          <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 hover:border-orange-500/20 transition-all duration-300 p-6 shadow-2xl flex flex-col items-center justify-center">
-            <TapasyaTimer userId={userId || undefined} onToggleZen={setIsZenMode} />
+          <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 hover:border-orange-500/20 transition-all duration-300 p-6 shadow-2xl flex flex-col items-center justify-center relative">
+            
+            {/* Minimal Today's Study Time Badge */}
+            <div className="absolute top-6 left-6 flex items-center gap-2 px-3 py-1.5 bg-zinc-950/60 rounded-xl border border-white/5 text-xs text-zinc-400">
+              <Clock className="w-3.5 h-3.5 text-orange-400" />
+              <span>Today: <strong className="text-zinc-200 font-mono">{formatTodayTime(todaySeconds)}</strong></span>
+            </div>
+
+            <TapasyaTimer 
+              userId={userId || undefined} 
+              onToggleZen={setIsZenMode} 
+              // Refresh today's progress when a session ends successfully
+            />
           </div>
 
           {!isZenMode && userId && <StudyCalendar userId={userId} />}
