@@ -11,12 +11,17 @@ interface TimerProps {
   onToggleZen?: (isZen: boolean) => void;
 }
 
-export default function TapasyaTimer({ userId, subject = "", topic = "", onToggleZen }: TimerProps) {
+export default function TapasyaTimer({
+  userId,
+  subject = "",
+  topic = "",
+  onToggleZen,
+}: TimerProps) {
   const [seconds, setSeconds] = useState(0);
   const [isActive, setIsActive] = useState(false);
-  
+
   // 25 minutes default session target for the ring progress
-  const totalTime = 25 * 60; 
+  const totalTime = 25 * 60;
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -29,12 +34,53 @@ export default function TapasyaTimer({ userId, subject = "", topic = "", onToggl
   }, [isActive]);
 
   const toggleTimer = async () => {
+    // 🛑 PASTE YOUR EXTENSION ID HERE:
+    const ARJUNA_EXTENSION_ID = "hoifgabjleobfmdobgjcojplpemamjom";
+
     if (!isActive) {
+      if (subject && !subject.trim()) {
+        alert("Please enter a Subject before starting deep work!");
+        return;
+      }
       setIsActive(true);
       if (onToggleZen) onToggleZen(true); // Trigger Zen Mode
+
+      // ⚡ TELL ARJUNA TO ENABLE STRICT MODE
+      if (typeof window !== "undefined" && (window as any).chrome?.runtime) {
+        (window as any).chrome.runtime.sendMessage(
+          ARJUNA_EXTENSION_ID,
+          { action: "ENABLE_STRICT_MODE" },
+          (response: any) => console.log("Arjuna:", response?.status),
+        );
+      }
     } else {
       setIsActive(false);
       if (onToggleZen) onToggleZen(false); // Exit Zen Mode
+
+      // ⚡ TELL ARJUNA TO ENABLE STRICT MODE
+      if (typeof window !== "undefined") {
+        if ((window as any).chrome && (window as any).chrome.runtime) {
+          console.log("Attempting to contact Arjuna...");
+          (window as any).chrome.runtime.sendMessage(
+            ARJUNA_EXTENSION_ID,
+            { action: "ENABLE_STRICT_MODE" },
+            (response: any) => {
+              if ((window as any).chrome.runtime.lastError) {
+                console.error(
+                  "Connection failed:",
+                  (window as any).chrome.runtime.lastError.message,
+                );
+              } else {
+                console.log("Arjuna replied:", response?.status);
+              }
+            },
+          );
+        } else {
+          console.error(
+            "Chrome Runtime is missing! The URL is not in manifest's externally_connectable array, or the extension ID is wrong.",
+          );
+        }
+      }
 
       if (seconds > 60 && userId) {
         const { error } = await supabase.from("sessions").insert({
@@ -45,14 +91,18 @@ export default function TapasyaTimer({ userId, subject = "", topic = "", onToggl
 
         if (!error) {
           const mins = Math.floor(seconds / 60);
-          alert(`🔥 Great job! You studied for ${mins} minute${mins !== 1 ? 's' : ''}.`);
+          alert(
+            `🔥 Great job! You studied for ${mins} minute${mins !== 1 ? "s" : ""}.`,
+          );
         } else {
           console.error("Failed to log session:", error.message);
         }
       } else if (seconds <= 60) {
-        alert("Session ended. (Needs to be over 1 minute to save to your history).");
+        alert(
+          "Session ended. (Needs to be over 1 minute to save to your history).",
+        );
       }
-      
+
       setSeconds(0);
     }
   };
@@ -67,27 +117,33 @@ export default function TapasyaTimer({ userId, subject = "", topic = "", onToggl
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
-    if (h > 0) return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    if (h > 0)
+      return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
   return (
     <div className="relative flex flex-col items-center justify-center py-6 px-4 w-full">
-      
       {/* SVG Circular Progress Ring */}
       <div className="relative flex items-center justify-center">
         <svg className="w-64 h-64 -rotate-90">
-          <circle 
-            cx="128" cy="128" r={radius} 
-            stroke="currentColor" strokeWidth="6" 
-            fill="transparent" 
-            className="text-zinc-800/80" 
+          <circle
+            cx="128"
+            cy="128"
+            r={radius}
+            stroke="currentColor"
+            strokeWidth="6"
+            fill="transparent"
+            className="text-zinc-800/80"
           />
-          <circle 
-            cx="128" cy="128" r={radius} 
-            stroke="currentColor" strokeWidth="6" 
-            fill="transparent" 
-            strokeDasharray={circumference} 
+          <circle
+            cx="128"
+            cy="128"
+            r={radius}
+            stroke="currentColor"
+            strokeWidth="6"
+            fill="transparent"
+            strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
             className="text-orange-500 transition-all duration-1000 ease-linear shadow-[0_0_30px_rgba(249,115,22,0.4)]"
             strokeLinecap="round"
