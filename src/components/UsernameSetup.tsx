@@ -10,7 +10,7 @@ export default function UsernameSetup({ userId, onComplete }: { userId: string; 
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
 
-  // Check if user already has a username set up when component mounts
+  // Check if user already has a name set up when component mounts
   useEffect(() => {
     const checkExistingProfile = async () => {
       if (!userId) {
@@ -21,12 +21,12 @@ export default function UsernameSetup({ userId, onComplete }: { userId: string; 
       try {
         const { data, error } = await supabase
           .from("aspirants")
-          .select("display_name")
+          .select("name")
           .eq("id", userId)
           .single();
 
-        // If a display name already exists, skip setup automatically!
-        if (!error && data && data.display_name) {
+        // If a name already exists, skip setup automatically!
+        if (!error && data && data.name) {
           onComplete();
         }
       } catch (err) {
@@ -61,7 +61,7 @@ export default function UsernameSetup({ userId, onComplete }: { userId: string; 
       const { data: existingUser } = await supabase
         .from("aspirants")
         .select("id")
-        .eq("display_name", cleanUsername)
+        .eq("name", cleanUsername)
         .single();
 
       if (existingUser && existingUser.id !== userId) {
@@ -70,11 +70,11 @@ export default function UsernameSetup({ userId, onComplete }: { userId: string; 
         return;
       }
 
-      // 2. Insert or update the user profile in aspirants table explicitly with onConflict
+      // 2. Insert or update using the correct 'name' column
       const { error: upsertError } = await supabase
         .from("aspirants")
         .upsert(
-          { id: userId, display_name: cleanUsername },
+          { id: userId, name: cleanUsername },
           { onConflict: "id" }
         );
 
@@ -88,7 +88,6 @@ export default function UsernameSetup({ userId, onComplete }: { userId: string; 
     }
   };
 
-  // Don't flash the modal if we're silently checking if they already have a username
   if (checking) {
     return null; 
   }
