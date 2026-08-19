@@ -1,159 +1,318 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../lib/supabase";
-import { Trophy, RefreshCw, Clock, Globe } from "lucide-react";
+import { 
+  Globe, 
+  ChevronLeft, 
+  ChevronRight, 
+  Clock, 
+  Zap, 
+  Gift, 
+  TrendingUp, 
+  Info 
+} from "lucide-react";
 
 interface LeaderboardEntry {
   user_id: string;
   display_name: string;
   total_seconds: number;
+  bio?: string;
+  rank_trend?: "up" | "down" | "same";
 }
 
-export default function Leaderboard() {
-  const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
+export default function Leaderboard({ currentUserId }: { currentUserId?: string }) {
+  // Navigation & Filter States
+  const [timeframe, setTimeframe] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  
+  // Data States
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [timeFilter, setTimeFilter] = useState<"today" | "alltime">("today");
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setCurrentUserId(user.id);
-    });
-    fetchLeaderboard(timeFilter);
-  }, [timeFilter]);
-
-  const fetchLeaderboard = async (filter: "today" | "alltime") => {
-    setLoading(true);
-    let query = supabase
-      .from("sessions")
-      .select(`user_id, duration_seconds, created_at, aspirants!inner(display_name)`);
-
-    if (filter === "today") {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      query = query.gte("created_at", startOfDay.toISOString());
-    }
-
-    const { data, error } = await query;
-
-    if (!error && data) {
-      const aggregated = data.reduce(
-        (acc: Record<string, LeaderboardEntry>, session: any) => {
-          const id = session.user_id;
-          if (!acc[id]) {
-            acc[id] = {
-              user_id: id,
-              display_name: session.aspirants?.display_name || "Aspirant",
-              total_seconds: 0,
-            };
-          }
-          acc[id].total_seconds += session.duration_seconds || 0;
-          return acc;
-        },
-        {},
-      );
-
-      setLeaders(
-        Object.values(aggregated).sort(
-          (a, b) => b.total_seconds - a.total_seconds,
-        ),
-      );
-    }
-    setLoading(false);
+  // Date Navigation Handlers
+  const handlePrevDate = () => {
+    const prev = new Date(selectedDate);
+    if (timeframe === "daily") prev.setDate(prev.getDate() - 1);
+    else if (timeframe === "weekly") prev.setDate(prev.getDate() - 7);
+    else if (timeframe === "monthly") prev.setMonth(prev.getMonth() - 1);
+    setSelectedDate(prev);
   };
 
-  const formatTotalTime = (totalSeconds: number) => {
+  const handleNextDate = () => {
+    const next = new Date(selectedDate);
+    if (timeframe === "daily") next.setDate(next.getDate() + 1);
+    else if (timeframe === "weekly") next.setDate(next.getDate() + 7);
+    else if (timeframe === "monthly") next.setMonth(next.getMonth() + 1);
+    setSelectedDate(next);
+  };
+
+  const formattedDateLabel = useMemo(() => {
+    if (timeframe === "daily") {
+      const isToday = selectedDate.toDateString() === new Date().toDateString();
+      if (isToday) return "Today, " + selectedDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+      return selectedDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    }
+    if (timeframe === "weekly") {
+      return `Week of ${selectedDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+    }
+    return selectedDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  }, [selectedDate, timeframe]);
+
+  // Fetch Leaderboard Data
+  const fetchRankings = async () => {
+    setLoading(true);
+
+    // Calculate time range based on selectedDate and timeframe
+    let startDate: Date;
+    let endDate: Date;
+
+    const workingDate = new Date(selectedDate);
+
+    if (timeframe === "daily") {
+      startDate = new Date(workingDate.getFullYear(), workingDate.getMonth(), workingDate.getDate(), 0, 0, 0);
+      endDate = new Date(workingDate.getFullYear(), workingDate.getMonth(), workingDate.getDate(), 23, 59, 59);
+    } else if (timeframe === "weekly") {
+      const day = workingDate.getDay();
+      const diff = workingDate.getDate() - day + (day === 0 ? -6 : 1); // Start on Monday
+      startDate = new Date(workingDate.setDate(diff));
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      startDate = new Date(workingDate.getFullYear(), workingDate.getMonth(), 1, 0, 0, 0);
+      endDate = new Date(workingDate.getFullYear(), workingDate.getMonth() + 1, 0, 23, 59, 59);
+    }
+
+    try {
+      // Query sessions within time range, joining user info from aspirants table
+      const { data: sessions, error: sessionErr } = await supabase
+        .from("sessions")
+        .select(`
+          user_id, 
+          duration_seconds, 
+          chapter,
+          aspirants (
+            display_name
+          )
+        `)
+        .gte("created_at", startDate.toISOString())
+        .lte("created_at", endDate.toISOString());
+
+      if (sessionErr) throw sessionErr;
+
+      // Aggregate totals per user securely
+      const userTotals: Record<string, { seconds: number; displayName: string; latestChapter?: string }> = {};
+      
+      sessions?.forEach((s: any) => {
+        const uid = s.user_id;
+        const profileName = s.aspirants?.display_name || "Aspirant";
+
+        if (!userTotals[uid]) {
+          userTotals[uid] = { 
+            seconds: 0, 
+            displayName: profileName, 
+            latestChapter: s.chapter 
+          };
+        }
+        userTotals[uid].seconds += s.duration_seconds || 0;
+        if (s.chapter) {
+          userTotals[uid].latestChapter = s.chapter;
+        }
+      });
+
+      // Construct ranked list
+      const formatted: LeaderboardEntry[] = Object.entries(userTotals)
+        .map(([uid, data]) => ({
+          user_id: uid,
+          display_name: data.displayName,
+          total_seconds: data.seconds,
+          bio: data.latestChapter || "Tapasya Deep Work Mode",
+          rank_trend: "same" as const,
+        }))
+        .sort((a, b) => b.total_seconds - a.total_seconds);
+
+      setLeaderboard(formatted);
+    } catch (err: any) {
+      console.error("Leaderboard fetch error:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRankings();
+  }, [timeframe, selectedDate, currentUserId]);
+
+  const formatHoursMinutes = (totalSeconds: number) => {
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
+    if (h > 0) return `${h}h ${m.toString().padStart(2, "0")}m`;
+    return `${m}m`;
   };
 
   return (
-    <div className="w-full p-6 md:p-8 bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 shadow-2xl flex flex-col h-full min-h-[400px]">
+    <div className="w-full bg-[#0c0d12]/90 backdrop-blur-2xl rounded-3xl border border-white/10 p-6 md:p-8 shadow-2xl space-y-6">
       
-      {/* Header & Time Filters */}
-      <div className="flex flex-col gap-4 mb-5">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-light text-zinc-100 flex items-center gap-2 tracking-wide">
-            <Trophy className="w-4 h-4 text-zinc-400" strokeWidth={1.5} />
-            Global Rankings
-          </h3>
-          <button
-            onClick={() => fetchLeaderboard(timeFilter)}
-            className="text-zinc-500 hover:text-zinc-300 transition-colors p-1"
-          >
-            <RefreshCw className="w-4 h-4" strokeWidth={1.5} />
-          </button>
-        </div>
-
-        {/* Today vs All-Time Tabs */}
-        <div className="flex p-1 bg-zinc-950/40 rounded-full border border-white/5">
-          <button
-            onClick={() => setTimeFilter("today")}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-full transition-all ${timeFilter === "today" ? "bg-zinc-800 text-zinc-200 shadow-sm" : "text-zinc-500 hover:text-zinc-400"}`}
-          >
-            Today's Rank
-          </button>
-          <button
-            onClick={() => setTimeFilter("alltime")}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-full transition-all ${timeFilter === "alltime" ? "bg-zinc-800 text-zinc-200 shadow-sm" : "text-zinc-500 hover:text-zinc-400"}`}
-          >
-            All-Time
-          </button>
-        </div>
-      </div>
-
-      {/* Leaderboard List */}
-      <div className="flex flex-col flex-1">
-        {loading ? (
-          <div className="w-full text-center text-zinc-600 text-sm animate-pulse mt-8 font-light">
-            Syncing rankings...
+      {/* Top Bar: Scope (Left) & Timeframe (Right) */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        
+        {/* Left: Global Indicator */}
+        <div className="flex items-center p-1 bg-zinc-900/80 rounded-2xl border border-white/5">
+          <div className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold bg-white text-zinc-950 shadow-md">
+            <Globe className="w-3.5 h-3.5" /> Global
           </div>
-        ) : leaders.length === 0 ? (
-          <p className="text-zinc-600 text-center py-8 text-sm font-light">
-            {timeFilter === "today" ? "No sessions logged today yet." : "No records found."}
-          </p>
-        ) : (
-          <div className="overflow-y-auto max-h-[320px] pr-2 custom-scrollbar space-y-1">
-            {leaders.map((leader, index) => (
-              <div
-                key={leader.user_id}
-                className="flex justify-between items-center py-3 px-2 border-b border-white/5 last:border-0 group hover:bg-white/[0.02] rounded-lg transition-colors"
+        </div>
+
+        {/* Right: Daily / Weekly / Monthly Toggles */}
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center p-1 bg-zinc-900/80 rounded-2xl border border-white/5">
+            {(["daily", "weekly", "monthly"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTimeframe(t)}
+                className={`px-4 py-1.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all ${
+                  timeframe === t
+                    ? "bg-white text-zinc-950 shadow-md"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
               >
-                <div className="flex items-center gap-4">
-                  <span
-                    className={`text-xs font-mono w-6 text-center ${index === 0 ? "text-zinc-100 font-bold" : "text-zinc-600"}`}
-                  >
-                    0{index + 1}
-                  </span>
-                  <span
-                    className={`text-sm font-light tracking-wide ${index === 0 ? "text-white" : "text-zinc-400 group-hover:text-zinc-300"} transition-colors ${currentUserId === leader.user_id ? "font-medium text-orange-400" : ""}`}
-                  >
-                    {leader.display_name}{" "}
-                    {currentUserId === leader.user_id && "(You)"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-zinc-500 font-mono text-sm">
-                  <Clock className="w-3 h-3" strokeWidth={1.5} />
-                  <span
-                    className={
-                      index === 0
-                        ? "text-zinc-300 font-medium"
-                        : "text-zinc-500"
-                    }
-                  >
-                    {formatTotalTime(leader.total_seconds)}
-                  </span>
-                </div>
-              </div>
+                {t}
+              </button>
             ))}
           </div>
+          
+          <button 
+            title="Rankings are computed live from verified focus sessions"
+            className="p-2 text-zinc-600 hover:text-zinc-400 transition-colors"
+          >
+            <Info className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Date Navigation Pill */}
+      <div className="flex justify-center items-center gap-4 py-2">
+        <button
+          onClick={handlePrevDate}
+          className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800/60 transition-colors"
+          title="Previous Date"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        <div className="px-6 py-2 bg-zinc-900/90 border border-white/5 rounded-full text-xs font-medium text-zinc-200 tracking-wide shadow-inner">
+          {formattedDateLabel}
+        </div>
+
+        <button
+          onClick={handleNextDate}
+          className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800/60 transition-colors"
+          title="Next Date"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Leaderboard Table Header */}
+      <div className="flex items-center justify-between px-4 pb-3 border-b border-white/5 text-[11px] font-mono uppercase tracking-widest text-zinc-500">
+        <div className="flex items-center gap-6">
+          <span className="w-6 text-center">#</span>
+          <span>User</span>
+        </div>
+        <div className="flex items-center gap-8 pr-2">
+          <Clock className="w-3.5 h-3.5 text-zinc-500" />
+        </div>
+      </div>
+
+      {/* Leaderboard Entries List */}
+      <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1 custom-scrollbar">
+        {loading ? (
+          <div className="py-16 text-center space-y-2 animate-pulse">
+            <p className="text-zinc-500 text-xs font-mono tracking-widest uppercase">Calculating Rankings...</p>
+          </div>
+        ) : leaderboard.length === 0 ? (
+          <div className="py-16 text-center text-zinc-500 text-xs font-light">
+            No sessions recorded for this date yet. Be the first to lock in! ⚡
+          </div>
+        ) : (
+          leaderboard.map((user, idx) => {
+            const isCurrentUser = user.user_id === currentUserId;
+            const rank = idx + 1;
+
+            return (
+              <div
+                key={user.user_id}
+                className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all border ${
+                  isCurrentUser
+                    ? "bg-orange-500/10 border-orange-500/30"
+                    : "bg-zinc-900/40 hover:bg-zinc-900/70 border-white/[0.03]"
+                }`}
+              >
+                {/* Left: Rank & User Profile */}
+                <div className="flex items-center gap-4 min-w-0">
+                  {/* Rank with Trend Badge */}
+                  <div className="flex items-center gap-1 w-7 text-xs font-mono font-medium">
+                    <span className={rank === 1 ? "text-orange-400 font-bold" : rank === 2 ? "text-zinc-300" : rank === 3 ? "text-amber-500" : "text-zinc-500"}>
+                      {rank}
+                    </span>
+                    <TrendingUp className="w-2.5 h-2.5 text-emerald-400 stroke-[3]" />
+                  </div>
+
+                  {/* Avatar Initials */}
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 border ${
+                    isCurrentUser 
+                      ? "bg-orange-500 text-zinc-950 border-orange-400" 
+                      : "bg-zinc-800 text-zinc-200 border-white/5"
+                  }`}>
+                    {user.display_name.slice(0, 2).toUpperCase()}
+                  </div>
+
+                  {/* Name & Bio/Topic */}
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className={`text-sm font-medium truncate ${isCurrentUser ? "text-orange-300" : "text-zinc-100"}`}>
+                        {user.display_name}
+                      </span>
+                      {isCurrentUser && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400">YOU</span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-zinc-500 truncate font-light mt-0.5">
+                      {user.bio}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Right: Study Duration & Quick Nudge Button */}
+                <div className="flex items-center gap-4 shrink-0 pl-2">
+                  <span className="font-mono text-sm text-zinc-200 font-medium">
+                    {formatHoursMinutes(user.total_seconds)}
+                  </span>
+
+                  {!isCurrentUser && currentUserId && (
+                    <button
+                      onClick={async () => {
+                        await supabase.from("squad_nudges").insert({
+                          sender_id: currentUserId,
+                          receiver_id: user.user_id,
+                        });
+                        alert(`⚡ Sent a focus boost to @${user.display_name}!`);
+                      }}
+                      className="p-2 rounded-xl text-zinc-500 hover:text-orange-400 hover:bg-orange-500/10 transition-colors"
+                      title="Send Praise / Focus Nudge"
+                    >
+                      <Gift className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
+
     </div>
   );
 }
