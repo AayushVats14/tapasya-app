@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { 
   ArrowLeft, Users, Shield, Copy, Check, 
   LogOut, Compass, Sparkles, Zap, MessageSquare, Clock 
 } from "lucide-react";
-import SquadRoom from "../../components/SquadRoom"; // 👈 Importing your existing component!
+import SquadRoom from "../../components/SquadRoom";
 
 interface MySquad {
   id: string;
@@ -19,7 +19,7 @@ interface MySquad {
   member_count: number;
 }
 
-export default function MySquadsPage() {
+function MySquadsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeRoomId = searchParams.get("room");
@@ -116,7 +116,7 @@ export default function MySquadsPage() {
     }
   };
 
-  // IF A ROOM IS SELECTED, RENDER THE LIVE SQUAD ROOM VIEW WITH CHAT & LIVE TIMERS
+  // IF A ROOM IS SELECTED, RENDER THE LIVE SQUAD ROOM VIEW
   if (activeRoomId && currentUserId) {
     const activeSquad = squads.find(s => s.id === activeRoomId);
     return (
@@ -128,13 +128,13 @@ export default function MySquadsPage() {
           >
             <ArrowLeft className="w-4 h-4" /> Back to My Squads
           </button>
-          <span className="text-zinc-300 font-medium text-sm">
+          <span className="text-zinc-300 font-medium text-sm flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-orange-400" />
             Room: <strong className="text-orange-400">{activeSquad?.name || "Squad Room"}</strong>
           </span>
         </div>
 
         <div className="w-full max-w-5xl">
-          {/* Renders your live chat & member timers component */}
           <SquadRoom groupId={activeRoomId} userId={currentUserId} />
         </div>
       </main>
@@ -253,7 +253,6 @@ export default function MySquadsPage() {
                     <LogOut className="w-3.5 h-3.5" /> Leave Squad
                   </button>
 
-                  {/* Clicking this now opens the live room view with chat and timers */}
                   <button
                     onClick={() => router.push(`/my-squads?room=${squad.id}`)}
                     className="flex items-center gap-2 px-5 py-2 bg-white/5 hover:bg-orange-500 hover:text-zinc-950 text-zinc-200 text-xs font-semibold rounded-xl border border-white/10 hover:border-transparent transition-all"
@@ -268,5 +267,17 @@ export default function MySquadsPage() {
 
       </div>
     </main>
+  );
+}
+
+export default function MySquadsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <MySquadsContent />
+    </Suspense>
   );
 }
