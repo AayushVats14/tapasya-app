@@ -1,13 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { AtSign, ArrowRight, CheckCircle2 } from "lucide-react";
+import { AtSign, ArrowRight } from "lucide-react";
 
 export default function UsernameSetup({ userId, onComplete }: { userId: string; onComplete: () => void }) {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
+
+  // Check if user already has a username set up when component mounts
+  useEffect(() => {
+    const checkExistingProfile = async () => {
+      if (!userId) {
+        setChecking(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("aspirants")
+          .select("display_name")
+          .eq("id", userId)
+          .single();
+
+        // If a display name already exists, skip setup automatically!
+        if (!error && data && data.display_name) {
+          onComplete();
+        }
+      } catch (err) {
+        console.error("Error checking existing profile:", err);
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    checkExistingProfile();
+  }, [userId, onComplete]);
 
   const handleSaveUsername = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,33 +56,42 @@ export default function UsernameSetup({ userId, onComplete }: { userId: string; 
     setLoading(true);
     setError("");
 
-    // 1. Check if username already exists in aspirants table
-    const { data: existingUser } = await supabase
-      .from("aspirants")
-      .select("id")
-      .eq("display_name", cleanUsername)
-      .single();
+    try {
+      // 1. Check if username already exists for another user
+      const { data: existingUser } = await supabase
+        .from("aspirants")
+        .select("id")
+        .eq("display_name", cleanUsername)
+        .single();
 
-    if (existingUser) {
-      setError("This username is already taken. Choose another one.");
+      if (existingUser && existingUser.id !== userId) {
+        setError("This username is already taken. Choose another one.");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Insert or update the user profile in aspirants table explicitly with onConflict
+      const { error: upsertError } = await supabase
+        .from("aspirants")
+        .upsert(
+          { id: userId, display_name: cleanUsername },
+          { onConflict: "id" }
+        );
+
+      if (upsertError) throw upsertError;
+
+      onComplete();
+    } catch (err: any) {
+      setError("Error saving username: " + (err.message || JSON.stringify(err)));
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // 2. Insert or update the user profile in aspirants table
-    const { error: upsertError } = await supabase
-      .from("aspirants")
-      .upsert({ id: userId, display_name: cleanUsername });
-
-    if (upsertError) {
-      setError("Error saving username: " + upsertError.message);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(false);
-    onComplete();
   };
+
+  // Don't flash the modal if we're silently checking if they already have a username
+  if (checking) {
+    return null; 
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
