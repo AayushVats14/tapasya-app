@@ -44,6 +44,7 @@ export default function FocusPage() {
       }
       setUserId(user.id);
 
+      // Checking the 'display_name' column which matches your community and leaderboard queries
       const { data: profile } = await supabase
         .from("aspirants")
         .select("display_name")
