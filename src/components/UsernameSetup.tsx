@@ -23,14 +23,17 @@ export default function UsernameSetup() {
       if (!user) return;
       setUserId(user.id);
 
+      // 1. FIXED: Use maybeSingle() instead of single() so it doesn't crash for brand new users
       const { data, error } = await supabase
         .from("aspirants")
         .select("display_name")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
-      // Open the modal ONLY if the user hasn't set a display name yet
-      if (!data?.display_name || data.display_name.trim() === "") {
+      if (error) throw error;
+
+      // Open the modal if the row doesn't exist AT ALL, or if display_name is empty
+      if (!data || !data.display_name || data.display_name.trim() === "") {
         setIsOpen(true);
       }
     } catch (error) {
@@ -46,14 +49,15 @@ export default function UsernameSetup() {
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("aspirants")
-        .update({ display_name: username.trim() })
-        .eq("id", userId);
+      // 2. FIXED: Use upsert() to insert the row if they are new, or update it if they somehow exist
+      const { error } = await supabase.from("aspirants").upsert({
+        id: userId,
+        display_name: username.trim(),
+      });
 
       if (error) throw error;
 
-      // Close the modal and optionally reload to apply the name everywhere
+      // Close the modal and reload the page so the app grabs their new name!
       setIsOpen(false);
       window.location.reload();
     } catch (error: any) {
@@ -63,7 +67,6 @@ export default function UsernameSetup() {
     }
   };
 
-  // If we are still checking the DB, or if they already have a name, render nothing.
   if (loading || !isOpen) return null;
 
   return (
