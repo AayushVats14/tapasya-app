@@ -1,47 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { User, Sparkles, ArrowRight } from "lucide-react";
 
-export default function UsernameSetup() {
-  const [isOpen, setIsOpen] = useState(false);
+interface UsernameSetupProps {
+  userId: string;
+  onComplete: (newName: string) => void;
+}
+
+export default function UsernameSetup({
+  userId,
+  onComplete,
+}: UsernameSetupProps) {
   const [username, setUsername] = useState("");
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    checkUsername();
-  }, []);
-
-  const checkUsername = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      setUserId(user.id);
-
-      // 1. FIXED: Use maybeSingle() instead of single() so it doesn't crash for brand new users
-      const { data, error } = await supabase
-        .from("aspirants")
-        .select("display_name")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      // Open the modal if the row doesn't exist AT ALL, or if display_name is empty
-      if (!data || !data.display_name || data.display_name.trim() === "") {
-        setIsOpen(true);
-      }
-    } catch (error) {
-      console.error("Error checking username:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +22,7 @@ export default function UsernameSetup() {
 
     setSaving(true);
     try {
-      // 2. FIXED: Use upsert() to insert the row if they are new, or update it if they somehow exist
+      // Upsert ensures that whether they are brand new or just missing a name, it saves properly.
       const { error } = await supabase.from("aspirants").upsert({
         id: userId,
         display_name: username.trim(),
@@ -57,9 +30,8 @@ export default function UsernameSetup() {
 
       if (error) throw error;
 
-      // Close the modal and reload the page so the app grabs their new name!
-      setIsOpen(false);
-      window.location.reload();
+      // Tell the FocusPage we successfully got a name!
+      onComplete(username.trim());
     } catch (error: any) {
       alert(`Failed to save username: ${error.message}`);
     } finally {
@@ -67,10 +39,8 @@ export default function UsernameSetup() {
     }
   };
 
-  if (loading || !isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
       <div className="w-full max-w-md bg-[#0c0d12] border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
         <div className="p-8">
           <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center text-orange-400 mb-6 border border-orange-500/20">

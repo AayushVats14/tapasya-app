@@ -37,14 +37,15 @@ export default function FocusPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(true);
+
+  // --- NEW: Strict Gatekeeper State ---
+  const [needsUsername, setNeedsUsername] = useState(false);
+
   const [isZenMode, setIsZenMode] = useState(false);
   const [nudges, setNudges] = useState<NudgeNotification[]>([]);
   const [todaySeconds, setTodaySeconds] = useState(0);
+  const [dailyTarget, setDailyTarget] = useState(4 * 3600);
 
-  // --- NEW: Daily Target State ---
-  const [dailyTarget, setDailyTarget] = useState(4 * 3600); // Default 4 hours
-
-  // App Navigation States
   const [activeTab, setActiveTab] = useState<"focus" | "rankings" | "analysis">(
     "focus",
   );
@@ -60,23 +61,29 @@ export default function FocusPage() {
       }
       setUserId(user.id);
 
+      // We use maybeSingle() so it doesn't crash on brand new Google users
       const { data: profile } = await supabase
         .from("aspirants")
         .select("display_name")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (profile?.display_name) {
+      if (
+        profile &&
+        profile.display_name &&
+        profile.display_name.trim() !== ""
+      ) {
         setUserName(profile.display_name);
         setEditName(profile.display_name);
       } else {
         setUserName(null);
+        setNeedsUsername(true); // GATEKEEPER TRIGGER: Force modal open!
       }
+
       setCheckingUsername(false);
       fetchTodayProgress(user.id);
     });
 
-    // Load saved daily target from local storage
     const savedTarget = localStorage.getItem("tapasya_daily_target");
     if (savedTarget) {
       setDailyTarget(Number(savedTarget));
@@ -202,7 +209,6 @@ export default function FocusPage() {
     }
   };
 
-  // --- NEW: Handle Target Update ---
   const handleSetTarget = () => {
     const currentHours = dailyTarget / 3600;
     const input = window.prompt(
@@ -244,8 +250,17 @@ export default function FocusPage() {
         className={`fixed top-3/4 left-1/4 w-[400px] h-[400px] bg-amber-600/10 rounded-full blur-[120px] pointer-events-none transition-opacity duration-700 ${isZenMode ? "opacity-20" : "opacity-100"}`}
       />
 
-      {/* Global Username Setup Modal */}
-      <UsernameSetup />
+      {/* --- FORCED USERNAME SETUP --- */}
+      {needsUsername && userId && (
+        <UsernameSetup
+          userId={userId}
+          onComplete={(newName) => {
+            setUserName(newName);
+            setEditName(newName);
+            setNeedsUsername(false); // Instantly dismisses modal!
+          }}
+        />
+      )}
 
       {/* Top Navigation Header */}
       {!isZenMode && (
@@ -263,7 +278,6 @@ export default function FocusPage() {
               <Users className="w-3.5 h-3.5 text-zinc-400" /> Discover Squads
             </button>
 
-            {/* User Dropdown Trigger */}
             <div className="relative">
               <button
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -277,7 +291,6 @@ export default function FocusPage() {
                 </div>
               </button>
 
-              {/* Glassmorphic Dropdown Menu */}
               {isUserMenuOpen && (
                 <div className="absolute right-0 mt-3 w-64 bg-[#14151a]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
                   <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
@@ -385,7 +398,7 @@ export default function FocusPage() {
           )}
 
           <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 hover:border-orange-500/20 transition-all duration-300 p-6 shadow-2xl flex flex-col items-center justify-center relative min-h-[400px]">
-            {/* NEW TARGET WIDGET */}
+            {/* TARGET WIDGET */}
             {!isZenMode && (
               <button
                 onClick={handleSetTarget}
@@ -500,7 +513,7 @@ export default function FocusPage() {
                   Total focused time logged across all sessions today.
                 </p>
 
-                {/* NEW ANALYSIS PROGRESS BAR */}
+                {/* ANALYSIS PROGRESS BAR */}
                 <div className="flex items-center gap-4">
                   <div className="flex-1 h-2 bg-zinc-950 rounded-full overflow-hidden border border-white/5 max-w-sm">
                     <div
