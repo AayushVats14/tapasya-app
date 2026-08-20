@@ -10,9 +10,20 @@ import TapasyaTimer from "../../components/Timer";
 import Sankalp from "../../components/Sankalp";
 import Leaderboard from "../../components/Leaderboard";
 import UsernameSetup from "../../components/UsernameSetup";
-import { 
-  Users, LogOut, Bell, Zap, X, Clock, Target, Trophy, 
-  BarChart2, Settings, User, ChevronRight, Camera 
+import {
+  Users,
+  LogOut,
+  Bell,
+  Zap,
+  X,
+  Clock,
+  Target,
+  Trophy,
+  BarChart2,
+  Settings,
+  User,
+  ChevronRight,
+  Camera,
 } from "lucide-react";
 
 interface NudgeNotification {
@@ -29,9 +40,14 @@ export default function FocusPage() {
   const [isZenMode, setIsZenMode] = useState(false);
   const [nudges, setNudges] = useState<NudgeNotification[]>([]);
   const [todaySeconds, setTodaySeconds] = useState(0);
-  
+
+  // --- NEW: Daily Target State ---
+  const [dailyTarget, setDailyTarget] = useState(4 * 3600); // Default 4 hours
+
   // App Navigation States
-  const [activeTab, setActiveTab] = useState<"focus" | "rankings" | "analysis">("focus");
+  const [activeTab, setActiveTab] = useState<"focus" | "rankings" | "analysis">(
+    "focus",
+  );
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
@@ -44,7 +60,6 @@ export default function FocusPage() {
       }
       setUserId(user.id);
 
-      // Checking the 'display_name' column which matches your community and leaderboard queries
       const { data: profile } = await supabase
         .from("aspirants")
         .select("display_name")
@@ -60,11 +75,21 @@ export default function FocusPage() {
       setCheckingUsername(false);
       fetchTodayProgress(user.id);
     });
+
+    // Load saved daily target from local storage
+    const savedTarget = localStorage.getItem("tapasya_daily_target");
+    if (savedTarget) {
+      setDailyTarget(Number(savedTarget));
+    }
   }, [router]);
 
   const fetchTodayProgress = async (currentUserId: string) => {
     const now = new Date();
-    const startOfDayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const startOfDayLocal = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    ).toISOString();
 
     const { data, error } = await supabase
       .from("sessions")
@@ -73,7 +98,10 @@ export default function FocusPage() {
       .gte("created_at", startOfDayLocal);
 
     if (!error && data) {
-      const total = data.reduce((acc, curr) => acc + (curr.duration_seconds || 0), 0);
+      const total = data.reduce(
+        (acc, curr) => acc + (curr.duration_seconds || 0),
+        0,
+      );
       setTodaySeconds(total);
     }
   };
@@ -100,9 +128,12 @@ export default function FocusPage() {
             return {
               id: n.id,
               sender_name: sender?.display_name || "A squad mate",
-              created_at: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              created_at: new Date(n.created_at).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
             };
-          })
+          }),
         );
         setNudges(formatted);
       }
@@ -113,8 +144,13 @@ export default function FocusPage() {
     const channel = supabase
       .channel(`workspace-nudges-${userId}`)
       .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'squad_nudges', filter: `receiver_id=eq.${userId}` },
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "squad_nudges",
+          filter: `receiver_id=eq.${userId}`,
+        },
         async (payload) => {
           const { data: sender } = await supabase
             .from("aspirants")
@@ -125,11 +161,14 @@ export default function FocusPage() {
           const newNudge: NudgeNotification = {
             id: payload.new.id,
             sender_name: sender?.display_name || "A squad mate",
-            created_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            created_at: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
           };
 
           setNudges((prev) => [newNudge, ...prev]);
-        }
+        },
       )
       .subscribe();
 
@@ -154,12 +193,27 @@ export default function FocusPage() {
       .from("aspirants")
       .update({ display_name: editName })
       .eq("id", userId);
-    
+
     if (!error) {
       setUserName(editName);
       setIsProfileModalOpen(false);
     } else {
       alert("Failed to update profile.");
+    }
+  };
+
+  // --- NEW: Handle Target Update ---
+  const handleSetTarget = () => {
+    const currentHours = dailyTarget / 3600;
+    const input = window.prompt(
+      "Set your daily focus target (in hours):",
+      currentHours.toString(),
+    );
+
+    if (input && !isNaN(Number(input))) {
+      const newTarget = Number(input) * 3600;
+      setDailyTarget(newTarget);
+      localStorage.setItem("tapasya_daily_target", newTarget.toString());
     }
   };
 
@@ -169,6 +223,8 @@ export default function FocusPage() {
     if (h > 0) return `${h}h ${m}m`;
     return `${m} mins`;
   };
+
+  const progressPercent = Math.min((todaySeconds / dailyTarget) * 100, 100);
 
   if (checkingUsername) {
     return (
@@ -180,42 +236,28 @@ export default function FocusPage() {
 
   return (
     <main className="min-h-screen bg-zinc-950 flex flex-col items-center p-4 sm:p-6 md:p-10 selection:bg-zinc-800 relative overflow-x-hidden transition-all duration-700">
-      
       {/* Ambient Background Glows */}
-      <div className={`fixed top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-orange-600/10 rounded-full blur-[140px] pointer-events-none transition-opacity duration-700 ${isZenMode ? "opacity-20" : "opacity-100"}`} />
-      <div className={`fixed top-3/4 left-1/4 w-[400px] h-[400px] bg-amber-600/10 rounded-full blur-[120px] pointer-events-none transition-opacity duration-700 ${isZenMode ? "opacity-20" : "opacity-100"}`} />
+      <div
+        className={`fixed top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-orange-600/10 rounded-full blur-[140px] pointer-events-none transition-opacity duration-700 ${isZenMode ? "opacity-20" : "opacity-100"}`}
+      />
+      <div
+        className={`fixed top-3/4 left-1/4 w-[400px] h-[400px] bg-amber-600/10 rounded-full blur-[120px] pointer-events-none transition-opacity duration-700 ${isZenMode ? "opacity-20" : "opacity-100"}`}
+      />
 
-      {!userName && userId && (
-        <UsernameSetup 
-          userId={userId} 
-          onComplete={async () => {
-            const { data: profile } = await supabase
-              .from("aspirants")
-              .select("display_name")
-              .eq("id", userId)
-              .single();
-            if (profile) {
-              setUserName(profile.display_name);
-              setEditName(profile.display_name);
-            }
-          }} 
-        />
-      )}
+      {/* Global Username Setup Modal */}
+      <UsernameSetup />
 
-      {/* Top Navigation Header - WIDENED & UPDATED WITH USER DROPDOWN */}
+      {/* Top Navigation Header */}
       {!isZenMode && (
         <nav className="w-full max-w-5xl flex justify-between items-center mb-6 relative z-30 transition-all duration-500">
-          
-          {/* Left: Status Indicator */}
           <div className="flex items-center gap-2 text-zinc-400 text-sm font-light bg-zinc-900/50 px-4 py-2 rounded-full border border-white/5 shadow-sm">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>Workspace</span>
           </div>
 
-          {/* Right: Actions & User Profile */}
           <div className="flex items-center gap-3">
-            <button 
-              onClick={() => router.push("/community")} 
+            <button
+              onClick={() => router.push("/community")}
               className="flex items-center gap-2 text-zinc-400 hover:text-white text-xs tracking-wide transition-colors px-4 py-2 bg-zinc-900/80 hover:bg-zinc-800 rounded-full border border-white/5 shadow-lg"
             >
               <Users className="w-3.5 h-3.5 text-zinc-400" /> Discover Squads
@@ -223,12 +265,12 @@ export default function FocusPage() {
 
             {/* User Dropdown Trigger */}
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                 className="flex items-center gap-2 pl-3 pr-1 py-1 bg-zinc-900/80 hover:bg-zinc-800 rounded-full border border-white/5 transition-colors shadow-lg"
               >
                 <span className="text-xs text-zinc-300 font-medium hidden sm:block max-w-[100px] truncate">
-                  {userName}
+                  {userName || "Aspirant"}
                 </span>
                 <div className="w-7 h-7 rounded-full bg-orange-500 text-zinc-950 flex items-center justify-center text-xs font-bold shrink-0">
                   {userName?.slice(0, 2).toUpperCase() || "U"}
@@ -238,11 +280,11 @@ export default function FocusPage() {
               {/* Glassmorphic Dropdown Menu */}
               {isUserMenuOpen && (
                 <div className="absolute right-0 mt-3 w-64 bg-[#14151a]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
-                  
-                  {/* Dropdown Header */}
                   <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-                    <span className="text-sm font-medium text-zinc-200 truncate">{userName}</span>
-                    <button 
+                    <span className="text-sm font-medium text-zinc-200 truncate">
+                      {userName || "Aspirant"}
+                    </span>
+                    <button
                       onClick={() => setIsUserMenuOpen(false)}
                       className="p-1 rounded-md hover:bg-white/10 text-zinc-500 transition-colors"
                     >
@@ -250,10 +292,12 @@ export default function FocusPage() {
                     </button>
                   </div>
 
-                  {/* Dropdown Options */}
                   <div className="p-2 space-y-1">
-                    <button 
-                      onClick={() => { setIsUserMenuOpen(false); setIsProfileModalOpen(true); }}
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setIsProfileModalOpen(true);
+                      }}
                       className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors"
                     >
                       <div className="flex items-center gap-3">
@@ -262,8 +306,11 @@ export default function FocusPage() {
                       <ChevronRight className="w-3.5 h-3.5 opacity-50" />
                     </button>
 
-                    <button 
-                      onClick={() => { setIsUserMenuOpen(false); alert("Settings Module Coming Soon!"); }}
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        alert("Settings Module Coming Soon!");
+                      }}
                       className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors"
                     >
                       <div className="flex items-center gap-3">
@@ -274,7 +321,7 @@ export default function FocusPage() {
 
                     <div className="h-px w-full bg-white/5 my-1" />
 
-                    <button 
+                    <button
                       onClick={handleLogout}
                       className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
                     >
@@ -321,25 +368,62 @@ export default function FocusPage() {
 
       {/* Main Content Container */}
       <div className="w-full max-w-5xl flex flex-col gap-6 relative z-10">
-        
         {/* --- TAB 1: FOCUS --- */}
-        <div className={`flex flex-col gap-6 transition-all duration-500 ${activeTab === "focus" ? "opacity-100 translate-y-0" : "opacity-0 absolute -translate-x-full pointer-events-none invisible"}`}>
+        <div
+          className={`flex flex-col gap-6 transition-all duration-500 ${activeTab === "focus" ? "opacity-100 translate-y-0" : "opacity-0 absolute -translate-x-full pointer-events-none invisible"}`}
+        >
           {!isZenMode && (
             <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 hover:border-orange-500/20 transition-all duration-300 p-6 shadow-2xl">
-              <h2 className="text-lg font-light text-zinc-100 mb-0.5">What is your objective?</h2>
-              <p className="text-zinc-500 text-xs mb-4">Define your micro-commitment before starting.</p>
+              <h2 className="text-lg font-light text-zinc-100 mb-0.5">
+                What is your objective?
+              </h2>
+              <p className="text-zinc-500 text-xs mb-4">
+                Define your micro-commitment before starting.
+              </p>
               <Sankalp />
             </div>
           )}
 
           <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 hover:border-orange-500/20 transition-all duration-300 p-6 shadow-2xl flex flex-col items-center justify-center relative min-h-[400px]">
+            {/* NEW TARGET WIDGET */}
             {!isZenMode && (
-              <div className="absolute top-6 left-6 flex items-center gap-2 px-3 py-1.5 bg-zinc-950/60 rounded-xl border border-white/5 text-xs text-zinc-400">
-                <Clock className="w-3.5 h-3.5 text-orange-400" />
-                <span>Today: <strong className="text-zinc-200 font-mono">{formatTodayTime(todaySeconds)}</strong></span>
-              </div>
+              <button
+                onClick={handleSetTarget}
+                className="absolute top-6 left-6 flex flex-col gap-2 px-4 py-3 bg-zinc-950/60 rounded-2xl border border-white/5 text-left transition-all hover:bg-zinc-900/80 hover:border-orange-500/30 group z-10 shadow-lg"
+                title="Click to edit daily target"
+              >
+                <div className="flex items-center gap-2 text-xs text-zinc-400">
+                  <Target className="w-3.5 h-3.5 text-orange-400" />
+                  <span>
+                    Daily Target:{" "}
+                    <strong className="text-zinc-200">
+                      {formatTodayTime(dailyTarget)}
+                    </strong>
+                  </span>
+                </div>
+
+                <div className="w-36 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-orange-500 rounded-full transition-all duration-1000 relative"
+                    style={{ width: `${progressPercent}%` }}
+                  >
+                    {progressPercent >= 100 && (
+                      <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                    )}
+                  </div>
+                </div>
+
+                <span className="text-[10px] font-mono text-zinc-500 group-hover:text-orange-400/80 transition-colors">
+                  {formatTodayTime(todaySeconds)} completed (
+                  {Math.floor(progressPercent)}%)
+                </span>
+              </button>
             )}
-            <TapasyaTimer userId={userId || undefined} onToggleZen={setIsZenMode} />
+
+            <TapasyaTimer
+              userId={userId || undefined}
+              onToggleZen={setIsZenMode}
+            />
           </div>
         </div>
 
@@ -351,7 +435,9 @@ export default function FocusPage() {
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Bell className="w-4 h-4 text-orange-400" />
-                  <h3 className="text-sm font-medium text-white">Squad Nudges</h3>
+                  <h3 className="text-sm font-medium text-white">
+                    Squad Nudges
+                  </h3>
                 </div>
                 {nudges.length > 0 && (
                   <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-[10px] font-mono rounded-full border border-orange-500/30">
@@ -367,7 +453,7 @@ export default function FocusPage() {
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
                   {nudges.map((nudge) => (
-                    <div 
+                    <div
                       key={nudge.id}
                       className="flex items-center justify-between p-3 bg-zinc-950/60 rounded-2xl border border-orange-500/20 shadow-lg animate-in fade-in duration-300"
                     >
@@ -376,8 +462,12 @@ export default function FocusPage() {
                           <Zap className="w-3.5 h-3.5" />
                         </div>
                         <div>
-                          <p className="text-xs text-zinc-200 font-medium">@{nudge.sender_name} nudged you!</p>
-                          <span className="text-[10px] font-mono text-zinc-500">{nudge.created_at}</span>
+                          <p className="text-xs text-zinc-200 font-medium">
+                            @{nudge.sender_name} nudged you!
+                          </p>
+                          <span className="text-[10px] font-mono text-zinc-500">
+                            {nudge.created_at}
+                          </span>
                         </div>
                       </div>
                       <button
@@ -401,30 +491,52 @@ export default function FocusPage() {
         {/* --- TAB 3: ANALYSIS --- */}
         {activeTab === "analysis" && !isZenMode && (
           <div className="flex flex-col gap-6 animate-in slide-in-from-bottom-8 fade-in duration-500">
-            <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 p-8 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-light text-zinc-100">Today's Deep Work</h3>
-                <p className="text-zinc-500 text-sm mt-1">Total focused time logged across all sessions today.</p>
+            <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 p-8 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className="flex-1">
+                <h3 className="text-xl font-light text-zinc-100">
+                  Today's Deep Work
+                </h3>
+                <p className="text-zinc-500 text-sm mt-1 mb-4">
+                  Total focused time logged across all sessions today.
+                </p>
+
+                {/* NEW ANALYSIS PROGRESS BAR */}
+                <div className="flex items-center gap-4">
+                  <div className="flex-1 h-2 bg-zinc-950 rounded-full overflow-hidden border border-white/5 max-w-sm">
+                    <div
+                      className="h-full bg-orange-500 rounded-full transition-all duration-1000 relative"
+                      style={{ width: `${progressPercent}%` }}
+                    >
+                      {progressPercent >= 100 && (
+                        <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-xs text-zinc-400 font-mono whitespace-nowrap">
+                    {Math.floor(progressPercent)}% of Target
+                  </span>
+                </div>
               </div>
-              <div className="flex items-baseline gap-2">
+
+              <div className="flex items-baseline gap-2 shrink-0">
                 <span className="text-5xl font-mono text-orange-400 font-light tracking-tight">
-                  {formatTodayTime(todaySeconds).replace(/[a-z\s]/gi, '')}
+                  {formatTodayTime(todaySeconds).replace(/[a-z\s]/gi, "")}
                 </span>
                 <span className="text-zinc-500 font-mono text-sm uppercase tracking-widest">
-                  {formatTodayTime(todaySeconds).replace(/[0-9]/g, '').trim() || 'MINS'}
+                  {formatTodayTime(todaySeconds).replace(/[0-9]/g, "").trim() ||
+                    "MINS"}
                 </span>
               </div>
             </div>
             {userId && <StudyCalendar userId={userId} />}
           </div>
         )}
-
       </div>
 
       <div className="w-full max-w-5xl flex justify-center items-center mt-auto pt-10 text-zinc-600 text-xs font-light tracking-widest uppercase relative z-10 pb-4">
         Tapasya Deep Work Engine
       </div>
-    
+
       {/* Floating Widgets */}
       <NotesWidget />
       <MusicPlayer />
@@ -433,10 +545,9 @@ export default function FocusPage() {
       {isProfileModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-[#0c0d12]/95 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            
             <div className="flex justify-between items-center px-6 py-4 border-b border-white/5">
               <h2 className="text-lg font-medium text-white">Public Profile</h2>
-              <button 
+              <button
                 onClick={() => setIsProfileModalOpen(false)}
                 className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-white/5 transition-colors"
               >
@@ -445,8 +556,6 @@ export default function FocusPage() {
             </div>
 
             <div className="p-6 space-y-6 flex flex-col items-center">
-              
-              {/* Avatar Upload Placeholder */}
               <div className="relative group cursor-pointer">
                 <div className="w-24 h-24 rounded-full bg-orange-500 flex items-center justify-center text-4xl font-bold text-zinc-950 shadow-xl transition-all group-hover:opacity-50">
                   {editName?.slice(0, 2).toUpperCase() || "U"}
@@ -455,12 +564,15 @@ export default function FocusPage() {
                   <Camera className="w-8 h-8 text-white" />
                 </div>
               </div>
-              <p className="text-xs text-zinc-500 uppercase tracking-widest">Avatar Upload (Soon)</p>
+              <p className="text-xs text-zinc-500 uppercase tracking-widest">
+                Avatar Upload (Soon)
+              </p>
 
-              {/* Username Edit Input */}
               <div className="w-full space-y-2">
-                <label className="text-xs text-zinc-400 font-medium ml-1">Display Name</label>
-                <input 
+                <label className="text-xs text-zinc-400 font-medium ml-1">
+                  Display Name
+                </label>
+                <input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
@@ -468,28 +580,25 @@ export default function FocusPage() {
                   placeholder="Enter username"
                 />
               </div>
-
             </div>
 
             <div className="px-6 py-4 bg-white/[0.02] border-t border-white/5 flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => setIsProfileModalOpen(false)}
                 className="px-4 py-2 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleSaveProfile}
                 className="px-6 py-2 rounded-xl text-sm font-medium bg-orange-500 hover:bg-orange-600 text-zinc-950 transition-colors"
               >
                 Save Changes
               </button>
             </div>
-
           </div>
         </div>
       )}
-
     </main>
   );
 }

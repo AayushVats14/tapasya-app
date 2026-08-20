@@ -2,133 +2,115 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { AtSign, ArrowRight } from "lucide-react";
+import { User, Sparkles, ArrowRight } from "lucide-react";
 
-export default function UsernameSetup({ userId, onComplete }: { userId: string; onComplete: () => void }) {
+export default function UsernameSetup() {
+  const [isOpen, setIsOpen] = useState(false);
   const [username, setUsername] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Check if user already has a name set up when component mounts
   useEffect(() => {
-    const checkExistingProfile = async () => {
-      if (!userId) {
-        setChecking(false);
-        return;
-      }
+    checkUsername();
+  }, []);
 
-      try {
-        const { data, error } = await supabase
-          .from("aspirants")
-          .select("name")
-          .eq("id", userId)
-          .single();
-
-        // If a name already exists, skip setup automatically!
-        if (!error && data && data.name) {
-          onComplete();
-        }
-      } catch (err) {
-        console.error("Error checking existing profile:", err);
-      } finally {
-        setChecking(false);
-      }
-    };
-
-    checkExistingProfile();
-  }, [userId, onComplete]);
-
-  const handleSaveUsername = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanUsername = username.trim().toLowerCase();
-
-    if (!cleanUsername) {
-      setError("Username cannot be empty.");
-      return;
-    }
-
-    if (cleanUsername.length < 3) {
-      setError("Username must be at least 3 characters long.");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
+  const checkUsername = async () => {
     try {
-      // 1. Check if username already exists for another user
-      const { data: existingUser } = await supabase
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      setUserId(user.id);
+
+      const { data, error } = await supabase
         .from("aspirants")
-        .select("id")
-        .eq("name", cleanUsername)
+        .select("display_name")
+        .eq("id", user.id)
         .single();
 
-      if (existingUser && existingUser.id !== userId) {
-        setError("This username is already taken. Choose another one.");
-        setLoading(false);
-        return;
+      // Open the modal ONLY if the user hasn't set a display name yet
+      if (!data?.display_name || data.display_name.trim() === "") {
+        setIsOpen(true);
       }
-
-      // 2. Insert or update using the correct 'name' column
-      const { error: upsertError } = await supabase
-        .from("aspirants")
-        .upsert(
-          { id: userId, name: cleanUsername },
-          { onConflict: "id" }
-        );
-
-      if (upsertError) throw upsertError;
-
-      onComplete();
-    } catch (err: any) {
-      setError("Error saving username: " + (err.message || JSON.stringify(err)));
+    } catch (error) {
+      console.error("Error checking username:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  if (checking) {
-    return null; 
-  }
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !userId) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("aspirants")
+        .update({ display_name: username.trim() })
+        .eq("id", userId);
+
+      if (error) throw error;
+
+      // Close the modal and optionally reload to apply the name everywhere
+      setIsOpen(false);
+      window.location.reload();
+    } catch (error: any) {
+      alert(`Failed to save username: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // If we are still checking the DB, or if they already have a name, render nothing.
+  if (loading || !isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-      <div className="w-full max-w-md bg-zinc-950 border border-white/10 rounded-3xl p-8 shadow-2xl space-y-6 relative animate-in fade-in zoom-in duration-200">
-        
-        <div className="space-y-2 text-center">
-          <div className="w-12 h-12 bg-zinc-900 border border-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white">
-            <AtSign className="w-6 h-6" />
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="w-full max-w-md bg-[#0c0d12] border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
+        <div className="p-8">
+          <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center text-orange-400 mb-6 border border-orange-500/20">
+            <Sparkles className="w-6 h-6" />
           </div>
-          <h2 className="text-xl font-medium text-white">Choose Your Username</h2>
-          <p className="text-xs text-zinc-400 font-light">
-            This will be your unique handle across global leaderboards and squad chats. You cannot change this later.
+
+          <h2 className="text-2xl font-light text-zinc-100 mb-2">
+            Claim your identity.
+          </h2>
+          <p className="text-zinc-500 text-sm mb-8 leading-relaxed">
+            What should your squad call you? This will appear on the global
+            leaderboard and inside your live study rooms.
           </p>
+
+          <form onSubmit={handleSave} className="space-y-6">
+            <div className="relative">
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+              <input
+                type="text"
+                required
+                maxLength={20}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter your display name..."
+                className="w-full bg-zinc-900/80 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-zinc-200 focus:outline-none focus:border-orange-500/50 transition-all shadow-inner placeholder:text-zinc-600"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={saving || !username.trim()}
+              className="w-full py-4 rounded-2xl text-sm font-bold bg-orange-500 hover:bg-orange-600 text-zinc-950 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(249,115,22,0.15)] hover:shadow-[0_0_25px_rgba(249,115,22,0.3)]"
+            >
+              {saving ? (
+                <div className="w-5 h-5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  Lock it in <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
         </div>
-
-        <form onSubmit={handleSaveUsername} className="space-y-4">
-          <div className="relative">
-            <AtSign className="absolute left-4 top-3.5 w-4 h-4 text-zinc-500" />
-            <input
-              type="text"
-              placeholder="e.g. cosmic_coder"
-              value={username}
-              onChange={(e) => setUsername(e.target.value.replace(/\s+/g, "_"))}
-              className="w-full pl-11 pr-4 py-3 bg-zinc-900 border border-white/5 rounded-2xl text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/20 transition-all"
-            />
-          </div>
-
-          {error && <p className="text-xs text-red-400 text-center font-light">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3.5 bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-medium rounded-2xl transition-colors flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
-          >
-            {loading ? "Checking availability..." : "Continue to Workspace"} <ArrowRight className="w-4 h-4" />
-          </button>
-        </form>
-
       </div>
     </div>
   );
