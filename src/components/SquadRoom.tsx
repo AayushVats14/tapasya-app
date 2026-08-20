@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { Send, Flame, Clock, User, Sparkles, MessageSquare } from "lucide-react";
+import {
+  Send,
+  Flame,
+  Clock,
+  User,
+  Sparkles,
+  MessageSquare,
+} from "lucide-react";
 
 interface SquadRoomProps {
   groupId: string;
@@ -51,7 +58,11 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
       if (!profiles) return;
 
       const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const startOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      ).toISOString();
 
       const enhancedMembers: Member[] = await Promise.all(
         profiles.map(async (p) => {
@@ -61,7 +72,10 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
             .eq("user_id", p.id)
             .gte("created_at", startOfDay);
 
-          const todayTotal = (sessions || []).reduce((acc, curr) => acc + (curr.duration_seconds || 0), 0);
+          const todayTotal = (sessions || []).reduce(
+            (acc, curr) => acc + (curr.duration_seconds || 0),
+            0,
+          );
 
           return {
             id: p.id,
@@ -70,7 +84,7 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
             current_session_seconds: 0,
             today_total_seconds: todayTotal,
           };
-        })
+        }),
       );
 
       setMembers(enhancedMembers);
@@ -92,20 +106,26 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
       if (data) {
         const formatted = await Promise.all(
           data.map(async (msg: any) => {
-            const { data: profile } = await supabase
-              .from("aspirants")
-              .select("display_name")
-              .eq("id", msg.user_id)
-              .single();
+            // Check for display_name in the message row itself first, fallback to profiles if needed
+            let senderName = msg.display_name;
+
+            if (!senderName) {
+              const { data: profile } = await supabase
+                .from("aspirants")
+                .select("display_name")
+                .eq("id", msg.user_id)
+                .single();
+              senderName = profile?.display_name || "Aspirant";
+            }
 
             return {
               id: msg.id,
               user_id: msg.user_id,
-              sender_name: profile?.display_name || "Aspirant",
+              sender_name: senderName,
               message: msg.message,
               created_at: msg.created_at,
             };
-          })
+          }),
         );
         setMessages(formatted);
       }
@@ -116,25 +136,35 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
     const channel = supabase
       .channel(`room-chat-${groupId}`)
       .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'squad_messages', filter: `group_id=eq.${groupId}` },
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "squad_messages",
+          filter: `group_id=eq.${groupId}`,
+        },
         async (payload) => {
-          const { data: profile } = await supabase
-            .from("aspirants")
-            .select("display_name")
-            .eq("id", payload.new.user_id)
-            .single();
+          let senderName = payload.new.display_name;
+
+          if (!senderName) {
+            const { data: profile } = await supabase
+              .from("aspirants")
+              .select("display_name")
+              .eq("id", payload.new.user_id)
+              .single();
+            senderName = profile?.display_name || "Aspirant";
+          }
 
           const incoming: Message = {
             id: payload.new.id,
             user_id: payload.new.user_id,
-            sender_name: profile?.display_name || "Aspirant",
+            sender_name: senderName,
             message: payload.new.message,
             created_at: payload.new.created_at,
           };
 
           setMessages((prev) => [...prev, incoming]);
-        }
+        },
       )
       .subscribe();
 
@@ -147,18 +177,29 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // 🚨 FIXED: Now grabs the display_name and inserts it into Supabase 🚨
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
 
     const text = newMessage;
-    setNewMessage("");
+    setNewMessage(""); // Clear input instantly for snappy feel
 
-    await supabase.from("squad_messages").insert({
+    // Find the current user's name from the active members list
+    const currentUser = members.find((m) => m.id === userId);
+    const myDisplayName = currentUser?.display_name || "Aspirant";
+
+    const { error } = await supabase.from("squad_messages").insert({
       group_id: groupId,
       user_id: userId,
       message: text,
+      display_name: myDisplayName, // Fulfills the Not-Null Constraint!
     });
+
+    if (error) {
+      alert("🚨 Message failed to send: " + error.message);
+      setNewMessage(text); // Put the text back if it fails
+    }
   };
 
   const formatTime = (totalSecs: number) => {
@@ -171,7 +212,6 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
 
   return (
     <div className="w-full h-[75vh] min-h-[550px] bg-[#0c0d12]/95 backdrop-blur-3xl rounded-3xl border border-white/10 shadow-2xl grid grid-cols-1 md:grid-cols-12 overflow-hidden">
-      
       {/* LEFT COLUMN: LIVE PRESENCE & TIMERS */}
       <div className="md:col-span-5 bg-black/40 border-r border-white/5 flex flex-col p-6 overflow-hidden">
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
@@ -179,12 +219,14 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             Live Presence
           </h3>
-          <span className="text-xs font-mono text-zinc-500">{members.length} members</span>
+          <span className="text-xs font-mono text-zinc-500">
+            {members.length} members
+          </span>
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
           {members.map((member) => (
-            <div 
+            <div
               key={member.id}
               className="p-4 bg-zinc-950/60 rounded-2xl border border-white/5 flex items-center justify-between shadow-inner"
             >
@@ -193,9 +235,12 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
                   {member.display_name.slice(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-zinc-200 truncate max-w-[120px]">{member.display_name}</h4>
+                  <h4 className="text-sm font-medium text-zinc-200 truncate max-w-[120px]">
+                    {member.display_name}
+                  </h4>
                   <p className="text-[10px] font-mono text-zinc-500">
-                    Today: {Math.floor(member.today_total_seconds / 3600)}h {Math.floor((member.today_total_seconds % 3600) / 60)}m
+                    Today: {Math.floor(member.today_total_seconds / 3600)}h{" "}
+                    {Math.floor((member.today_total_seconds % 3600) / 60)}m
                   </p>
                 </div>
               </div>
@@ -213,12 +258,13 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
 
       {/* RIGHT COLUMN: SQUAD CHAT */}
       <div className="md:col-span-7 flex flex-col bg-transparent justify-between overflow-hidden">
-        
         <div className="px-6 py-4 border-b border-white/5 bg-white/[0.01] flex items-center justify-between">
           <h3 className="text-zinc-200 font-medium text-sm flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-orange-400" /> Squad Chat
           </h3>
-          <span className="text-[11px] text-zinc-500 font-mono">Encrypted & Real-time</span>
+          <span className="text-[11px] text-zinc-500 font-mono">
+            Encrypted & Real-time
+          </span>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
@@ -231,15 +277,20 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
             messages.map((msg) => {
               const isMe = msg.user_id === userId;
               return (
-                <div key={msg.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                <div
+                  key={msg.id}
+                  className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
+                >
                   <span className="text-[10px] font-mono text-zinc-500 mb-1 px-1">
                     {isMe ? "You" : msg.sender_name}
                   </span>
-                  <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed ${
-                    isMe 
-                      ? "bg-orange-500 text-zinc-950 font-medium rounded-tr-none shadow-lg" 
-                      : "bg-zinc-900/90 text-zinc-200 border border-white/5 rounded-tl-none shadow-md"
-                  }`}>
+                  <div
+                    className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed ${
+                      isMe
+                        ? "bg-orange-500 text-zinc-950 font-medium rounded-tr-none shadow-lg"
+                        : "bg-zinc-900/90 text-zinc-200 border border-white/5 rounded-tl-none shadow-md"
+                    }`}
+                  >
                     {msg.message}
                   </div>
                 </div>
@@ -249,24 +300,25 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
           <div ref={messagesEndRef} />
         </div>
 
-        <form onSubmit={handleSendMessage} className="p-4 border-t border-white/5 bg-black/20 flex items-center gap-3">
-          <input 
+        <form
+          onSubmit={handleSendMessage}
+          className="p-4 border-t border-white/5 bg-black/20 flex items-center gap-3"
+        >
+          <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Motivate your squad..."
             className="flex-1 bg-zinc-900/60 border border-white/10 rounded-2xl px-4 py-3 text-xs text-zinc-200 focus:outline-none focus:border-orange-500/50 transition-colors placeholder:text-zinc-600"
           />
-          <button 
+          <button
             type="submit"
             className="p-3 bg-orange-500 hover:bg-orange-600 text-zinc-950 rounded-2xl transition-colors shadow-lg flex items-center justify-center"
           >
             <Send className="w-4 h-4" />
           </button>
         </form>
-
       </div>
-
     </div>
   );
 }
