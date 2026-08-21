@@ -10,6 +10,7 @@ import TapasyaTimer from "../../components/Timer";
 import Sankalp from "../../components/Sankalp";
 import Leaderboard from "../../components/Leaderboard";
 import UsernameSetup from "../../components/UsernameSetup";
+
 import {
   Users,
   LogOut,
@@ -33,6 +34,7 @@ interface NudgeNotification {
 
 export default function FocusPage() {
   const router = useRouter();
+
   const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(true);
@@ -56,6 +58,10 @@ export default function FocusPage() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
+
+  // --------------------------------------------------
+  // GET CURRENT USER
+  // --------------------------------------------------
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -96,6 +102,10 @@ export default function FocusPage() {
     }
   }, [router]);
 
+  // --------------------------------------------------
+  // TODAY'S STUDY PROGRESS
+  // --------------------------------------------------
+
   const fetchTodayProgress = async (currentUserId: string) => {
     const now = new Date();
 
@@ -120,6 +130,10 @@ export default function FocusPage() {
       setTodaySeconds(total);
     }
   };
+
+  // --------------------------------------------------
+  // NUDGES
+  // --------------------------------------------------
 
   useEffect(() => {
     if (!userId) return;
@@ -178,10 +192,13 @@ export default function FocusPage() {
           const newNudge: NudgeNotification = {
             id: payload.new.id,
             sender_name: sender?.display_name || "A squad mate",
-            created_at: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
+            created_at: new Date(payload.new.created_at).toLocaleTimeString(
+              [],
+              {
+                hour: "2-digit",
+                minute: "2-digit",
+              },
+            ),
           };
 
           setNudges((prev) => [newNudge, ...prev]);
@@ -194,31 +211,51 @@ export default function FocusPage() {
     };
   }, [userId]);
 
+  // --------------------------------------------------
+  // DISMISS NUDGE
+  // --------------------------------------------------
+
   const dismissNudge = async (id: string) => {
     setNudges((prev) => prev.filter((n) => n.id !== id));
+
     await supabase.from("squad_nudges").delete().eq("id", id);
   };
+
+  // --------------------------------------------------
+  // LOGOUT
+  // --------------------------------------------------
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push("/");
   };
 
+  // --------------------------------------------------
+  // SAVE PROFILE
+  // --------------------------------------------------
+
   const handleSaveProfile = async () => {
     if (!editName.trim() || !userId) return;
 
     const { error } = await supabase
       .from("aspirants")
-      .update({ display_name: editName })
+      .update({
+        display_name: editName.trim(),
+      })
       .eq("id", userId);
 
     if (!error) {
-      setUserName(editName);
+      setUserName(editName.trim());
+      setEditName(editName.trim());
       setIsProfileModalOpen(false);
     } else {
       alert("Failed to update profile.");
     }
   };
+
+  // --------------------------------------------------
+  // DAILY TARGET
+  // --------------------------------------------------
 
   const handleSetTarget = () => {
     const currentHours = dailyTarget / 3600;
@@ -229,7 +266,14 @@ export default function FocusPage() {
     );
 
     if (input && !isNaN(Number(input))) {
-      const newTarget = Number(input) * 3600;
+      const hours = Number(input);
+
+      if (hours <= 0) {
+        alert("Please enter a target greater than 0.");
+        return;
+      }
+
+      const newTarget = hours * 3600;
 
       setDailyTarget(newTarget);
 
@@ -240,19 +284,33 @@ export default function FocusPage() {
     }
   };
 
+  // --------------------------------------------------
+  // TIME FORMAT
+  // --------------------------------------------------
+
   const formatTodayTime = (totalSecs: number) => {
     const h = Math.floor(totalSecs / 3600);
     const m = Math.floor((totalSecs % 3600) / 60);
 
-    if (h > 0) return `${h}h ${m}m`;
+    if (h > 0) {
+      return `${h}h ${m}m`;
+    }
 
     return `${m} mins`;
   };
+
+  // --------------------------------------------------
+  // PROGRESS
+  // --------------------------------------------------
 
   const progressPercent = Math.min(
     (todaySeconds / dailyTarget) * 100,
     100,
   );
+
+  // --------------------------------------------------
+  // LOADING
+  // --------------------------------------------------
 
   if (checkingUsername) {
     return (
@@ -262,10 +320,15 @@ export default function FocusPage() {
     );
   }
 
+  // --------------------------------------------------
+  // MAIN UI
+  // --------------------------------------------------
+
   return (
     <main className="min-h-screen bg-zinc-950 flex flex-col items-center p-4 sm:p-6 md:p-10 selection:bg-zinc-800 relative overflow-x-hidden transition-all duration-700">
 
       {/* Ambient Background Glows */}
+
       <div
         className={`fixed top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-orange-600/10 rounded-full blur-[140px] pointer-events-none transition-opacity duration-700 ${
           isZenMode ? "opacity-20" : "opacity-100"
@@ -279,6 +342,7 @@ export default function FocusPage() {
       />
 
       {/* FORCED USERNAME SETUP */}
+
       {needsUsername && userId && (
         <UsernameSetup
           userId={userId}
@@ -290,15 +354,18 @@ export default function FocusPage() {
         />
       )}
 
-      {/* Top Navigation Header */}
+      {/* TOP NAVIGATION */}
+
       {!isZenMode && (
         <nav className="w-full max-w-5xl flex justify-between items-center mb-6 relative z-30 transition-all duration-500">
+
           <div className="flex items-center gap-2 text-zinc-400 text-sm font-light bg-zinc-900/50 px-4 py-2 rounded-full border border-white/5 shadow-sm">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>Workspace</span>
           </div>
 
           <div className="flex items-center gap-3">
+
             <button
               onClick={() => router.push("/community")}
               className="flex items-center gap-2 text-zinc-400 hover:text-white text-xs tracking-wide transition-colors px-4 py-2 bg-zinc-900/80 hover:bg-zinc-800 rounded-full border border-white/5 shadow-lg"
@@ -307,7 +374,10 @@ export default function FocusPage() {
               Discover Squads
             </button>
 
+            {/* USER MENU */}
+
             <div className="relative">
+
               <button
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                 className="flex items-center gap-2 pl-3 pr-1 py-1 bg-zinc-900/80 hover:bg-zinc-800 rounded-full border border-white/5 transition-colors shadow-lg"
@@ -323,7 +393,9 @@ export default function FocusPage() {
 
               {isUserMenuOpen && (
                 <div className="absolute right-0 mt-3 w-64 bg-[#14151a]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+
                   <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+
                     <span className="text-sm font-medium text-zinc-200 truncate">
                       {userName || "Aspirant"}
                     </span>
@@ -334,9 +406,11 @@ export default function FocusPage() {
                     >
                       <X className="w-4 h-4" />
                     </button>
+
                   </div>
 
                   <div className="p-2 space-y-1">
+
                     <button
                       onClick={() => {
                         setIsUserMenuOpen(false);
@@ -378,17 +452,21 @@ export default function FocusPage() {
                         Logout
                       </div>
                     </button>
+
                   </div>
                 </div>
               )}
+
             </div>
           </div>
         </nav>
       )}
 
-      {/* Internal Tab Navigation */}
+      {/* INTERNAL TAB NAVIGATION */}
+
       {!isZenMode && (
         <div className="w-full max-w-5xl flex justify-center mb-8 relative z-10">
+
           <div className="flex items-center gap-1 p-1.5 bg-zinc-900/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-xl">
 
             <button
@@ -435,10 +513,14 @@ export default function FocusPage() {
         </div>
       )}
 
-      {/* Main Content Container */}
+      {/* MAIN CONTENT */}
+
       <div className="w-full max-w-5xl flex flex-col gap-6 relative z-10">
 
-        {/* TAB 1: FOCUS */}
+        {/* =====================================================
+            TAB 1: FOCUS
+        ===================================================== */}
+
         <div
           className={`flex flex-col gap-6 transition-all duration-500 ${
             activeTab === "focus"
@@ -446,6 +528,7 @@ export default function FocusPage() {
               : "opacity-0 absolute -translate-x-full pointer-events-none invisible"
           }`}
         >
+
           {!isZenMode && (
             <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 hover:border-orange-500/20 transition-all duration-300 p-6 shadow-2xl">
 
@@ -457,7 +540,6 @@ export default function FocusPage() {
                 Define your micro-commitment before starting.
               </p>
 
-              {/* FIXED SANKALP */}
               <Sankalp
                 subject={subject}
                 setSubject={setSubject}
@@ -471,12 +553,14 @@ export default function FocusPage() {
           <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 hover:border-orange-500/20 transition-all duration-300 p-6 shadow-2xl flex flex-col items-center justify-center relative min-h-[400px]">
 
             {/* TARGET WIDGET */}
+
             {!isZenMode && (
               <button
                 onClick={handleSetTarget}
                 className="absolute top-6 left-6 flex flex-col gap-2 px-4 py-3 bg-zinc-950/60 rounded-2xl border border-white/5 text-left transition-all hover:bg-zinc-900/80 hover:border-orange-500/30 group z-10 shadow-lg"
                 title="Click to edit daily target"
               >
+
                 <div className="flex items-center gap-2 text-xs text-zinc-400">
                   <Target className="w-3.5 h-3.5 text-orange-400" />
 
@@ -489,6 +573,7 @@ export default function FocusPage() {
                 </div>
 
                 <div className="w-36 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+
                   <div
                     className="h-full bg-orange-500 rounded-full transition-all duration-1000 relative"
                     style={{ width: `${progressPercent}%` }}
@@ -497,38 +582,48 @@ export default function FocusPage() {
                       <div className="absolute inset-0 bg-white/20 animate-pulse" />
                     )}
                   </div>
+
                 </div>
 
                 <span className="text-[10px] font-mono text-zinc-500 group-hover:text-orange-400/80 transition-colors">
                   {formatTodayTime(todaySeconds)} completed (
                   {Math.floor(progressPercent)}%)
                 </span>
+
               </button>
             )}
 
             <TapasyaTimer
               userId={userId || undefined}
+              subject={subject}
+              topic={topic}
               onToggleZen={setIsZenMode}
             />
 
           </div>
         </div>
 
-        {/* TAB 2: RANKINGS & NUDGES */}
+        {/* =====================================================
+            TAB 2: RANKINGS & NUDGES
+        ===================================================== */}
+
         {activeTab === "rankings" && !isZenMode && (
           <div className="flex flex-col gap-6 animate-in slide-in-from-bottom-8 fade-in duration-500">
 
-            {/* Nudges Panel */}
+            {/* NUDGES PANEL */}
+
             <div className="w-full bg-zinc-900/40 backdrop-blur-xl rounded-3xl border border-white/5 p-6 shadow-xl space-y-4">
 
               <div className="flex justify-between items-center">
 
                 <div className="flex items-center gap-2">
+
                   <Bell className="w-4 h-4 text-orange-400" />
 
                   <h3 className="text-sm font-medium text-white">
                     Squad Nudges
                   </h3>
+
                 </div>
 
                 {nudges.length > 0 && (
@@ -559,6 +654,7 @@ export default function FocusPage() {
                         </div>
 
                         <div>
+
                           <p className="text-xs text-zinc-200 font-medium">
                             @{nudge.sender_name} nudged you!
                           </p>
@@ -566,8 +662,8 @@ export default function FocusPage() {
                           <span className="text-[10px] font-mono text-zinc-500">
                             {nudge.created_at}
                           </span>
-                        </div>
 
+                        </div>
                       </div>
 
                       <button
@@ -586,13 +682,17 @@ export default function FocusPage() {
 
             </div>
 
-            {/* Leaderboard */}
+            {/* LEADERBOARD */}
+
             <Leaderboard currentUserId={userId || undefined} />
 
           </div>
         )}
 
-        {/* TAB 3: ANALYSIS */}
+        {/* =====================================================
+            TAB 3: ANALYSIS
+        ===================================================== */}
+
         {activeTab === "analysis" && !isZenMode && (
           <div className="flex flex-col gap-6 animate-in slide-in-from-bottom-8 fade-in duration-500">
 
@@ -609,9 +709,11 @@ export default function FocusPage() {
                 </p>
 
                 {/* ANALYSIS PROGRESS BAR */}
+
                 <div className="flex items-center gap-4">
 
                   <div className="flex-1 h-2 bg-zinc-950 rounded-full overflow-hidden border border-white/5 max-w-sm">
+
                     <div
                       className="h-full bg-orange-500 rounded-full transition-all duration-1000 relative"
                       style={{ width: `${progressPercent}%` }}
@@ -620,6 +722,7 @@ export default function FocusPage() {
                         <div className="absolute inset-0 bg-white/20 animate-pulse" />
                       )}
                     </div>
+
                   </div>
 
                   <span className="text-xs text-zinc-400 font-mono whitespace-nowrap">
@@ -652,19 +755,27 @@ export default function FocusPage() {
 
       </div>
 
+      {/* FOOTER */}
+
       <div className="w-full max-w-5xl flex justify-center items-center mt-auto pt-10 text-zinc-600 text-xs font-light tracking-widest uppercase relative z-10 pb-4">
         Tapasya Deep Work Engine
       </div>
 
-      {/* Floating Widgets */}
+      {/* FLOATING WIDGETS */}
+
       <NotesWidget />
       <MusicPlayer />
 
-      {/* PUBLIC PROFILE MODAL */}
+      {/* =====================================================
+          PUBLIC PROFILE MODAL
+      ===================================================== */}
+
       {isProfileModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
 
           <div className="w-full max-w-md bg-[#0c0d12]/95 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+
+            {/* HEADER */}
 
             <div className="flex justify-between items-center px-6 py-4 border-b border-white/5">
 
@@ -680,6 +791,8 @@ export default function FocusPage() {
               </button>
 
             </div>
+
+            {/* BODY */}
 
             <div className="p-6 space-y-6 flex flex-col items-center">
 
@@ -716,6 +829,8 @@ export default function FocusPage() {
               </div>
 
             </div>
+
+            {/* FOOTER */}
 
             <div className="px-6 py-4 bg-white/[0.02] border-t border-white/5 flex justify-end gap-3">
 
