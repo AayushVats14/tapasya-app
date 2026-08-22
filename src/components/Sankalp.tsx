@@ -18,6 +18,15 @@ export default function Sankalp({
 }: SankalpProps) {
   const [isLocked, setIsLocked] = useState(false);
 
+  // Quick Select Presets
+  const suggestedSubjects = [
+    "Physics",
+    "Chemistry",
+    "Biology",
+    "Mathematics",
+    "Coding",
+  ];
+
   const handleLockIn = (e: React.FormEvent) => {
     e.preventDefault();
     if (subject.trim() || topic.trim()) {
@@ -53,17 +62,37 @@ export default function Sankalp({
   // The unlocked input form
   return (
     <form onSubmit={handleLockIn} className="w-full space-y-4">
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-          <BookOpen className="h-4 w-4 text-zinc-500" />
+      <div className="space-y-2">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <BookOpen className="h-4 w-4 text-zinc-500" />
+          </div>
+          <input
+            type="text"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            placeholder="Enter Subject (e.g., Physics, Biology)"
+            className="w-full pl-11 pr-4 py-3 bg-zinc-900/50 border border-white/5 rounded-xl text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-orange-500/30 transition-all"
+          />
         </div>
-        <input
-          type="text"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          placeholder="Enter Subject (e.g., Physics, Biology)"
-          className="w-full pl-11 pr-4 py-3 bg-zinc-900/50 border border-white/5 rounded-xl text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-orange-500/30 transition-all"
-        />
+
+        {/* QUICK SELECT TAGS */}
+        <div className="flex flex-wrap gap-2 px-1">
+          {suggestedSubjects.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => setSubject(tag)}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-mono tracking-wide transition-all ${
+                subject === tag
+                  ? "bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-[0_0_10px_rgba(249,115,22,0.1)]"
+                  : "bg-white/5 text-zinc-400 hover:text-zinc-200 hover:bg-white/10 border border-transparent"
+              }`}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="relative">
