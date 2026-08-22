@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { Send, Clock, Sparkles, MessageSquare, Gift } from "lucide-react";
+import { Send, Clock, Sparkles, MessageSquare, Bell } from "lucide-react";
 
 interface SquadRoomProps {
   groupId: string;
@@ -335,7 +335,7 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-medium text-orange-400 bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/20 hover:border-orange-500/40 transition-all disabled:opacity-50"
                         title={`Nudge ${member.display_name}`}
                       >
-                        <Gift className="w-3 h-3" />
+                        <Bell className="w-3 h-3" />
                         {nudgeSending === member.id ? "Sending..." : "Nudge"}
                       </button>
                     )}
