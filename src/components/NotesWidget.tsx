@@ -163,9 +163,9 @@ export default function NotesWidget() {
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-4xl h-[75vh] min-h-[500px] bg-[#0c0d12]/95 backdrop-blur-3xl rounded-3xl border border-white/10 shadow-2xl flex overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="w-full max-w-4xl h-[85vh] md:h-[75vh] min-h-[500px] bg-[#0c0d12]/95 backdrop-blur-3xl rounded-3xl border border-white/10 shadow-2xl flex flex-col md:flex-row overflow-hidden animate-in zoom-in-95 duration-300">
             {/* LEFT SIDEBAR */}
-            <div className="w-1/3 min-w-[250px] bg-black/40 border-r border-white/5 flex flex-col">
+            <div className="w-full md:w-1/3 md:min-w-[250px] h-[35%] md:h-auto bg-black/40 border-b md:border-b-0 md:border-r border-white/5 flex flex-col shrink-0">
               <div className="px-6 py-5 border-b border-white/5">
                 <h3 className="text-zinc-100 font-semibold flex items-center gap-2">
                   Notes{" "}
@@ -213,7 +213,7 @@ export default function NotesWidget() {
                   <Plus className="w-5 h-5" />
                 </button>
 
-                <div className="flex items-center gap-2 bg-black/40 border border-white/5 rounded-full px-3 py-1.5 w-64 focus-within:border-white/20 transition-colors">
+                <div className="flex items-center gap-2 bg-black/40 border border-white/5 rounded-full px-3 py-1.5 flex-1 max-w-[16rem] mx-2 focus-within:border-white/20 transition-colors">
                   <Search className="w-4 h-4 text-zinc-500" />
                   <input
                     type="text"
