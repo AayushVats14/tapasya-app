@@ -336,9 +336,9 @@ export default function FocusPage() {
 
       {!isZenMode && (
         <nav className="w-full max-w-5xl flex justify-between items-center mb-6 relative z-30 transition-all duration-500">
-          <div className="flex items-center gap-2 text-zinc-400 text-sm font-light bg-zinc-900/50 px-4 py-2 rounded-full border border-white/5 shadow-sm">
+          <div className="flex items-center gap-2 text-orange-400 text-sm font-light bg-zinc-900/50 px-4 py-3 rounded-full border border-white/5 shadow-sm">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Workspace</span>
+            <span>Tapasya</span>
           </div>
 
           <div className="flex items-center gap-3">
