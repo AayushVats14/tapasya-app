@@ -3,10 +3,19 @@
 import { useState } from "react";
 import { BookOpen, Hash, CheckCircle2 } from "lucide-react";
 
-export default function Sankalp() {
-  // We move the state INSIDE the component so it manages itself!
-  const [subject, setSubject] = useState("");
-  const [topic, setTopic] = useState("");
+interface SankalpProps {
+  subject: string;
+  setSubject: (val: string) => void;
+  topic: string;
+  setTopic: (val: string) => void;
+}
+
+export default function Sankalp({
+  subject,
+  setSubject,
+  topic,
+  setTopic,
+}: SankalpProps) {
   const [isLocked, setIsLocked] = useState(false);
 
   const handleLockIn = (e: React.FormEvent) => {

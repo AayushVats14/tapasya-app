@@ -39,6 +39,8 @@ export default function FocusPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(true);
+  const [subject, setSubject] = useState("");
+  const [topic, setTopic] = useState("");
 
   const [needsUsername, setNeedsUsername] = useState(false);
   const [setupName, setSetupName] = useState("");
@@ -461,7 +463,12 @@ export default function FocusPage() {
               <p className="text-zinc-500 text-xs mb-4">
                 Define your micro-commitment before starting.
               </p>
-              <Sankalp />
+              <Sankalp
+                subject={subject}
+                setSubject={setSubject}
+                topic={topic}
+                setTopic={setTopic}
+              />
             </div>
           )}
 
@@ -501,6 +508,8 @@ export default function FocusPage() {
             )}
             <TapasyaTimer
               userId={userId || undefined}
+              subject={subject}
+              topic={topic}
               onToggleZen={setIsZenMode}
             />
           </div>
