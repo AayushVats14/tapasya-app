@@ -26,7 +26,7 @@ export default function LandingPage() {
     );
 
   return (
-    <main className="min-h-screen bg-zinc-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-zinc-950 flex flex-col items-center justify-center p-6 selection:bg-zinc-800 relative">
+    <main className="min-h-screen bg-zinc-950 'bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-zinc-950 flex flex-col items-center justify-center p-6 selection:bg-zinc-800 relative">
       {/* Decorative gradient orb */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-zinc-800/20 rounded-full blur-[100px] pointer-events-none"></div>
 
