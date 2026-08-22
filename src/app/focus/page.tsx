@@ -17,7 +17,6 @@ import {
   Target,
   Trophy,
   BarChart2,
-  Settings,
   User,
   ChevronRight,
   Camera,
@@ -313,18 +312,6 @@ export default function FocusPage() {
                     >
                       <div className="flex items-center gap-3">
                         <User className="w-4 h-4" /> Public profile
-                      </div>
-                      <ChevronRight className="w-3.5 h-3.5 opacity-50" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        alert("Settings Module Coming Soon!");
-                      }}
-                      className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Settings className="w-4 h-4" /> App settings
                       </div>
                       <ChevronRight className="w-3.5 h-3.5 opacity-50" />
                     </button>
