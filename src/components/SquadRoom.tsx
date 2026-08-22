@@ -2,13 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import {
-  Send,
-  Clock,
-  Sparkles,
-  MessageSquare,
-  Gift,
-} from "lucide-react";
 import { Send, Clock, Sparkles, MessageSquare, Gift } from "lucide-react";
 
 interface SquadRoomProps {
@@ -33,28 +26,23 @@ interface Message {
   created_at: string;
 }
 
-export default function SquadRoom({
-  groupId,
-  userId,
-}: SquadRoomProps) {
+export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
 
+  // New Loading States
   const [sending, setSending] = useState(false);
   const [nudgeSending, setNudgeSending] = useState<string | null>(null);
-
   const [joinedAt, setJoinedAt] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ============================================================
-  // FORMAT MESSAGE DATE/TIME
+  // FORMATTING HELPERS
   // ============================================================
-
   const formatMessageTime = (dateString: string) => {
     const date = new Date(dateString);
-
     return date.toLocaleString([], {
       day: "2-digit",
       month: "short",
@@ -64,145 +52,54 @@ export default function SquadRoom({
     });
   };
 
-  // ============================================================
-  // FORMAT STUDY TIME
-  // ============================================================
-
   const formatTime = (totalSecs: number) => {
     const h = Math.floor(totalSecs / 3600);
     const m = Math.floor((totalSecs % 3600) / 60);
     const s = totalSecs % 60;
-
-    if (h > 0) {
-      return `${h}h ${m}m`;
-    }
-
+    if (h > 0) return `${h}h ${m}m`;
     return `${m}m ${s}s`;
   };
 
   // ============================================================
   // FETCH MEMBERS + JOIN DATE + STUDY TIME
   // ============================================================
-
   useEffect(() => {
     const fetchMembersAndProgress = async () => {
       try {
-        // --------------------------------------------------------
-        // GET GROUP MEMBERS
-        // --------------------------------------------------------
+        const { data: memberRows, error: memberError } = await supabase
+          .from("group_members")
+          .select("user_id, joined_at")
+          .eq("group_id", groupId);
 
-        const { data: memberRows, error: memberError } =
-          await supabase
-            .from("group_members")
-            .select("user_id, joined_at")
-            .eq("group_id", groupId);
+        if (memberError || !memberRows || memberRows.length === 0) return;
 
-        if (memberError) {
-          console.error(
-            "Failed to fetch group members:",
-            memberError.message,
-          );
-          return;
-        }
-
-        if (!memberRows || memberRows.length === 0) {
-          setMembers([]);
-          return;
-        }
-
-        // --------------------------------------------------------
-        // GET CURRENT USER JOIN DATE
-        // --------------------------------------------------------
-
+        // Save current user's join date to state
         const currentMember = memberRows.find(
           (member) => member.user_id === userId,
         );
-      const { data: profiles } = await supabase
-        .from("aspirants")
-        .select("id, display_name")
-        .in("id", userIds);
-
-      if (!profiles) return;
-
-      const now = new Date();
-      const startOfDay = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-      ).toISOString();
-
-      const enhancedMembers: Member[] = await Promise.all(
-        profiles.map(async (p) => {
-          const { data: sessions } = await supabase
-            .from("sessions")
-            .select("duration_seconds, created_at")
-            .eq("user_id", p.id)
-            .gte("created_at", startOfDay);
-
-          const todayTotal = (sessions || []).reduce(
-            (acc, curr) => acc + (curr.duration_seconds || 0),
-            0,
-          );
-
-          return {
-            id: p.id,
-            display_name: p.display_name || "Aspirant",
-            is_studying: false,
-            current_session_seconds: 0,
-            today_total_seconds: todayTotal,
-          };
-        }),
-      );
-
         if (currentMember?.joined_at) {
           setJoinedAt(currentMember.joined_at);
         }
 
-        const userIds = memberRows.map(
-          (member) => member.user_id,
-        );
+        const userIds = memberRows.map((member) => member.user_id);
 
-        // --------------------------------------------------------
-        // GET PROFILES
-        // --------------------------------------------------------
-
-        const { data: profiles, error: profileError } =
-          await supabase
-            .from("aspirants")
-            .select("id, display_name")
-            .in("id", userIds);
-
-        if (profileError) {
-          console.error(
-            "Failed to fetch profiles:",
-            profileError.message,
-          );
-          return;
-        }
+        const { data: profiles } = await supabase
+          .from("aspirants")
+          .select("id, display_name")
+          .in("id", userIds);
 
         if (!profiles) return;
 
-        // --------------------------------------------------------
-        // TODAY START
-        // --------------------------------------------------------
-
         const now = new Date();
-
         const startOfDay = new Date(
           now.getFullYear(),
           now.getMonth(),
           now.getDate(),
         ).toISOString();
 
-        // --------------------------------------------------------
-        // GET EACH MEMBER'S STUDY TIME
-        // --------------------------------------------------------
-
         const enhancedMembers: Member[] = await Promise.all(
           profiles.map(async (profile) => {
-            const memberRow = memberRows.find(
-              (m) => m.user_id === profile.id,
-            );
+            const memberRow = memberRows.find((m) => m.user_id === profile.id);
 
             const { data: sessions } = await supabase
               .from("sessions")
@@ -211,15 +108,13 @@ export default function SquadRoom({
               .gte("created_at", startOfDay);
 
             const todayTotal = (sessions || []).reduce(
-              (total, session) =>
-                total + (session.duration_seconds || 0),
+              (total, session) => total + (session.duration_seconds || 0),
               0,
             );
 
             return {
               id: profile.id,
-              display_name:
-                profile.display_name || "Aspirant",
+              display_name: profile.display_name || "Aspirant",
               is_studying: false,
               current_session_seconds: 0,
               today_total_seconds: todayTotal,
@@ -240,77 +135,31 @@ export default function SquadRoom({
   }, [groupId, userId]);
 
   // ============================================================
-  // FETCH ONLY MESSAGES FROM AFTER USER JOINED
+  // FETCH MESSAGES & SUBSCRIBE (FILTERED BY JOIN DATE)
   // ============================================================
-
   useEffect(() => {
     if (!groupId || !userId || !joinedAt) return;
-
     let mounted = true;
 
     const fetchMessages = async () => {
       try {
         const { data, error } = await supabase
           .from("squad_messages")
-          .select(
-            "id, user_id, display_name, message, created_at",
-          )
+          .select("id, user_id, display_name, message, created_at")
           .eq("group_id", groupId)
-          .gte("created_at", joinedAt)
-          .order("created_at", {
-            ascending: true,
-          })
+          .gte("created_at", joinedAt) // Filter out messages from before they joined
+          .order("created_at", { ascending: true })
           .limit(100);
 
-        if (error) {
-          console.error(
-            "Failed to fetch messages:",
-            error.message,
-          );
-          return;
-        }
+        if (error || !data || !mounted) return;
 
-        if (!data || !mounted) return;
-
-        const formattedMessages: Message[] = data.map(
-          (msg) => ({
-            id: msg.id,
-            user_id: msg.user_id,
-            sender_name:
-              msg.display_name || "Aspirant",
-            message: msg.message,
-            created_at: msg.created_at,
-          }),
-  useEffect(() => {
-    const fetchMessages = async () => {
-      const { data } = await supabase
-        .from("squad_messages")
-        .select("*")
-        .eq("group_id", groupId)
-        .order("created_at", { ascending: true })
-        .limit(50);
-
-      if (data) {
-        const formatted = await Promise.all(
-          data.map(async (msg: any) => {
-            let senderName = msg.display_name;
-            if (!senderName) {
-              const { data: profile } = await supabase
-                .from("aspirants")
-                .select("display_name")
-                .eq("id", msg.user_id)
-                .single();
-              senderName = profile?.display_name || "Aspirant";
-            }
-            return {
-              id: msg.id,
-              user_id: msg.user_id,
-              sender_name: senderName,
-              message: msg.message,
-              created_at: msg.created_at,
-            };
-          }),
-        );
+        const formattedMessages: Message[] = data.map((msg) => ({
+          id: msg.id,
+          user_id: msg.user_id,
+          sender_name: msg.display_name || "Aspirant",
+          message: msg.message,
+          created_at: msg.created_at,
+        }));
 
         setMessages(formattedMessages);
       } catch (error) {
@@ -319,10 +168,6 @@ export default function SquadRoom({
     };
 
     fetchMessages();
-
-    // ==========================================================
-    // REAL-TIME CHAT
-    // ==========================================================
 
     const channel = supabase
       .channel(`room-chat-${groupId}-${userId}`)
@@ -337,63 +182,26 @@ export default function SquadRoom({
         (payload) => {
           const newMessage = payload.new as any;
 
-          // ----------------------------------------------------
-          // IMPORTANT:
-          // Don't show messages created before this user's join
-          // ----------------------------------------------------
-
-          if (
-            joinedAt &&
-            new Date(newMessage.created_at) <
-              new Date(joinedAt)
-          ) {
+          // Ignore messages created before this user joined
+          if (joinedAt && new Date(newMessage.created_at) < new Date(joinedAt))
             return;
-          }
 
           const incoming: Message = {
             id: newMessage.id,
             user_id: newMessage.user_id,
-            sender_name:
-              newMessage.display_name || "Aspirant",
+            sender_name: newMessage.display_name || "Aspirant",
             message: newMessage.message,
             created_at: newMessage.created_at,
           };
 
           setMessages((previous) => {
-            // Prevent duplicate messages
-            if (
-              previous.some(
-                (message) => message.id === incoming.id,
-              )
-            ) {
+            if (previous.some((message) => message.id === incoming.id))
               return previous;
-            }
-
             return [...previous, incoming];
           });
-        async (payload) => {
-          let senderName = payload.new.display_name;
-          if (!senderName) {
-            const { data: profile } = await supabase
-              .from("aspirants")
-              .select("display_name")
-              .eq("id", payload.new.user_id)
-              .single();
-            senderName = profile?.display_name || "Aspirant";
-          }
-          const incoming: Message = {
-            id: payload.new.id,
-            user_id: payload.new.user_id,
-            sender_name: senderName,
-            message: payload.new.message,
-            created_at: payload.new.created_at,
-          };
-          setMessages((prev) => [...prev, incoming]);
         },
       )
-      .subscribe((status) => {
-        console.log("Squad chat realtime:", status);
-      });
+      .subscribe();
 
     return () => {
       mounted = false;
@@ -401,25 +209,15 @@ export default function SquadRoom({
     };
   }, [groupId, userId, joinedAt]);
 
-  // ============================================================
-  // AUTO SCROLL
-  // ============================================================
-
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   // ============================================================
   // SEND MESSAGE
   // ============================================================
-
-  const handleSendMessage = async (
-    e: React.FormEvent,
-  ) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const text = newMessage.trim();
 
     if (!text || sending) return;
@@ -428,88 +226,44 @@ export default function SquadRoom({
     setNewMessage("");
 
     try {
-      // --------------------------------------------------------
-      // GET CURRENT USER DISPLAY NAME
-      // --------------------------------------------------------
+      const currentUser = members.find((m) => m.id === userId);
+      const displayName = currentUser?.display_name || "Aspirant";
 
-      const { data: profile } = await supabase
-        .from("aspirants")
-        .select("display_name")
-        .eq("id", userId)
-        .single();
+      const { error } = await supabase.from("squad_messages").insert({
+        group_id: groupId,
+        user_id: userId,
+        display_name: displayName,
+        message: text,
+      });
 
-      const displayName =
-        profile?.display_name || "Aspirant";
-
-      // --------------------------------------------------------
-      // INSERT MESSAGE
-      // --------------------------------------------------------
-
-      const { error } = await supabase
-        .from("squad_messages")
-        .insert({
-          group_id: groupId,
-          user_id: userId,
-          display_name: displayName,
-          message: text,
-        });
-
-      if (error) {
-        console.error(
-          "Failed to send message:",
-          error.message,
-        );
-
-        // Put text back if sending failed
-        setNewMessage(text);
-      }
-    } catch (error) {
+      if (error) throw error;
+    } catch (error: any) {
       console.error("Send message error:", error);
-      setNewMessage(text);
+      alert("🚨 Message failed to send: " + error.message);
+      setNewMessage(text); // Restore text on fail
     } finally {
       setSending(false);
-    const currentUser = members.find((m) => m.id === userId);
-    const myDisplayName = currentUser?.display_name || "Aspirant";
-
-    const { error } = await supabase.from("squad_messages").insert({
-      group_id: groupId,
-      user_id: userId,
-      message: text,
-      display_name: myDisplayName,
-    });
-
-    if (error) {
-      alert("🚨 Message failed to send: " + error.message);
-      setNewMessage(text);
     }
   };
 
   // ============================================================
   // SEND NUDGE
   // ============================================================
-
   const handleNudge = async (receiverId: string) => {
-    if (receiverId === userId) return;
-    if (nudgeSending) return;
+    if (receiverId === userId || nudgeSending) return;
 
     setNudgeSending(receiverId);
 
     try {
-      const { error } = await supabase
-        .from("squad_nudges")
-        .insert({
-          group_id: groupId,
-          from_user_id: userId,
-          to_user_id: receiverId,
-        });
+      const { error } = await supabase.from("squad_nudges").insert({
+        sender_id: userId,
+        receiver_id: receiverId,
+      });
 
       if (error) {
-        console.error(
-          "Failed to send nudge:",
-          error.message,
-        );
+        alert("Failed to send nudge: " + error.message);
       } else {
-        console.log("Nudge sent!");
+        alert("⚡ Nudge sent successfully!");
       }
     } catch (error) {
       console.error("Nudge error:", error);
@@ -521,66 +275,38 @@ export default function SquadRoom({
   // ============================================================
   // UI
   // ============================================================
-
   return (
     <div className="w-full h-[75vh] min-h-[550px] bg-[#0c0d12]/95 backdrop-blur-3xl rounded-3xl border border-white/10 shadow-2xl grid grid-cols-1 md:grid-cols-12 overflow-hidden">
-
-      {/* ======================================================
-          LEFT COLUMN
-      ====================================================== */}
-
-      {/* LEFT COLUMN: LIVE PRESENCE & TIMERS */}
+      {/* LEFT COLUMN: LIVE PRESENCE */}
       <div className="md:col-span-5 bg-black/40 border-r border-white/5 flex flex-col p-6 overflow-hidden">
-
-        {/* HEADER */}
-
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
-
           <h3 className="text-zinc-200 font-medium text-sm flex items-center gap-2">
-
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-
             Live Presence
-
           </h3>
-
-          <span className="text-xs font-mono text-zinc-500">
-            {members.length} members
-          </span>
-
           <span className="text-xs font-mono text-zinc-500">
             {members.length} members
           </span>
         </div>
 
-        {/* MEMBERS */}
-
         <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
-
-          {members.map((member) => {
-
-            const isMe = member.id === userId;
-
-            return (
-              <div
-                key={member.id}
-                className="p-4 bg-zinc-950/60 rounded-2xl border border-white/5 shadow-inner"
-              >
-
-                <div className="flex items-center justify-between">
-
-                  {/* USER */}
-
+          {members.length === 0 ? (
+            <div className="text-center text-zinc-600 text-xs py-10">
+              No squad members found.
+            </div>
+          ) : (
+            members.map((member) => {
+              const isMe = member.id === userId;
+              return (
+                <div
+                  key={member.id}
+                  className="p-4 bg-zinc-950/60 rounded-2xl border border-white/5 shadow-inner flex items-center justify-between"
+                >
                   <div className="flex items-center gap-3 min-w-0">
-
                     <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-xs shrink-0">
-                      {member.display_name
-                        .slice(0, 2)
-                        .toUpperCase()}
+                      {member.display_name.slice(0, 2).toUpperCase()}
                     </div>
-
                     <div className="min-w-0">
-
                       <h4 className="text-sm font-medium text-zinc-200 truncate max-w-[130px]">
                         {member.display_name}
                         {isMe && (
@@ -589,206 +315,69 @@ export default function SquadRoom({
                           </span>
                         )}
                       </h4>
-
                       <p className="text-[10px] font-mono text-zinc-500">
-                        Today:{" "}
-                        {Math.floor(
-                          member.today_total_seconds /
-                            3600,
-                        )}
-                        h{" "}
-                        {Math.floor(
-                          (member.today_total_seconds %
-                            3600) /
-                            60,
-                        )}
-                        m
+                        Today: {Math.floor(member.today_total_seconds / 3600)}h{" "}
+                        {Math.floor((member.today_total_seconds % 3600) / 60)}m
                       </p>
-
                     </div>
-
                   </div>
 
-                  {/* RIGHT SIDE */}
-
                   <div className="flex flex-col items-end gap-2 shrink-0">
-
                     <span className="px-2.5 py-1 rounded-full text-[10px] font-mono tracking-wide bg-zinc-900 text-zinc-400 border border-white/5 flex items-center gap-1.5">
-
                       <Clock className="w-3 h-3 text-orange-400" />
-
-                      {formatTime(
-                        member.today_total_seconds,
-                      )}
-
+                      {formatTime(member.today_total_seconds)}
                     </span>
-
-                    {/* NUDGE */}
-
                     {!isMe && (
                       <button
                         type="button"
-                        onClick={() =>
-                          handleNudge(member.id)
-                        }
-                        disabled={
-                          nudgeSending === member.id
-                        }
+                        onClick={() => handleNudge(member.id)}
+                        disabled={nudgeSending === member.id}
                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-medium text-orange-400 bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/20 hover:border-orange-500/40 transition-all disabled:opacity-50"
                         title={`Nudge ${member.display_name}`}
                       >
-
                         <Gift className="w-3 h-3" />
-
-                        {nudgeSending === member.id
-                          ? "Sending..."
-                          : "Nudge"}
-
+                        {nudgeSending === member.id ? "Sending..." : "Nudge"}
                       </button>
                     )}
-
                   </div>
-
-          {members.map((member) => (
-            <div
-              key={member.id}
-              className="p-4 bg-zinc-950/60 rounded-2xl border border-white/5 flex items-center justify-between shadow-inner"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-xs">
-                  {member.display_name.slice(0, 2).toUpperCase()}
                 </div>
-                <div>
-                  <h4 className="text-sm font-medium text-zinc-200 truncate max-w-[120px]">
-                    {member.display_name}
-                  </h4>
-                  <p className="text-[10px] font-mono text-zinc-500">
-                    Today: {Math.floor(member.today_total_seconds / 3600)}h{" "}
-                    {Math.floor((member.today_total_seconds % 3600) / 60)}m
-                  </p>
-                </div>
-
-              <div className="flex flex-col items-end gap-1.5">
-                <span className="px-2.5 py-1 rounded-full text-[10px] font-mono tracking-wide bg-zinc-900 text-zinc-400 border border-white/5 flex items-center gap-1.5">
-                  <Clock className="w-3 h-3 text-orange-400" />
-                  {formatTime(member.today_total_seconds)}
-                </span>
-
-                {/* 🚨 NEW: IN-ROOM NUDGE BUTTON 🚨 */}
-                {member.id !== userId && (
-                  <button
-                    onClick={async () => {
-                      const { error } = await supabase
-                        .from("squad_nudges")
-                        .insert({
-                          sender_id: userId,
-                          receiver_id: member.id,
-                        });
-                      if (!error) {
-                        alert(
-                          `⚡ Sent a focus boost to @${member.display_name}!`,
-                        );
-                      } else {
-                        alert("Failed to send nudge: " + error.message);
-                      }
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-orange-500 hover:text-zinc-950 text-zinc-400 rounded-lg text-[10px] font-medium transition-colors border border-white/10 hover:border-transparent"
-                    title="Send a Focus Boost"
-                  >
-                    <Gift className="w-3 h-3" /> Nudge
-                  </button>
-                )}
-              </div>
-            );
-          })}
-
-          {members.length === 0 && (
-            <div className="text-center text-zinc-600 text-xs py-10">
-              No squad members found.
-            </div>
+              );
+            })
           )}
-
         </div>
       </div>
 
-      {/* ======================================================
-          RIGHT COLUMN — CHAT
-      ====================================================== */}
-
+      {/* RIGHT COLUMN: SQUAD CHAT */}
       <div className="md:col-span-7 flex flex-col bg-transparent justify-between overflow-hidden">
-
-        {/* CHAT HEADER */}
-
         <div className="px-6 py-4 border-b border-white/5 bg-white/[0.01] flex items-center justify-between">
-
           <h3 className="text-zinc-200 font-medium text-sm flex items-center gap-2">
-
-            <MessageSquare className="w-4 h-4 text-orange-400" />
-
-            Squad Chat
-
+            <MessageSquare className="w-4 h-4 text-orange-400" /> Squad Chat
           </h3>
-
-          <span className="text-[11px] text-zinc-500 font-mono">
-            Real-time
-          </span>
-
           <span className="text-[11px] text-zinc-500 font-mono">
             Encrypted & Real-time
           </span>
         </div>
 
-        {/* ====================================================
-            MESSAGES
-        ==================================================== */}
-
         <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-
           {messages.length === 0 ? (
-
             <div className="h-full flex flex-col items-center justify-center text-zinc-600 text-xs font-light">
-
               <Sparkles className="w-6 h-6 mb-2 opacity-40" />
-
-              <span>
-                No messages yet.
-              </span>
-
+              <span>No messages yet.</span>
               <span className="mt-1 text-zinc-700">
                 Drop a motivation boost for your squad!
               </span>
-
             </div>
-
           ) : (
-
             messages.map((msg) => {
-
-              const isMe =
-                msg.user_id === userId;
-
+              const isMe = msg.user_id === userId;
               return (
                 <div
                   key={msg.id}
-                  className={`flex flex-col ${
-                    isMe
-                      ? "items-end"
-                      : "items-start"
-                  }`}
-                >
-
-                  {/* NAME */}
-
                   className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
                 >
                   <span className="text-[10px] font-mono text-zinc-500 mb-1 px-1">
-                    {isMe
-                      ? "You"
-                      : msg.sender_name}
+                    {isMe ? "You" : msg.sender_name}
                   </span>
-
-                  {/* MESSAGE */}
-
                   <div
                     className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed ${
                       isMe
@@ -798,58 +387,36 @@ export default function SquadRoom({
                   >
                     {msg.message}
                   </div>
-
-                  {/* DATE + TIME */}
-
                   <span className="text-[9px] font-mono text-zinc-600 mt-1 px-1">
-                    {formatMessageTime(
-                      msg.created_at,
-                    )}
+                    {formatMessageTime(msg.created_at)}
                   </span>
-
                 </div>
               );
             })
           )}
-
           <div ref={messagesEndRef} />
-
         </div>
-
-        {/* ====================================================
-            MESSAGE INPUT
-        ==================================================== */}
 
         <form
           onSubmit={handleSendMessage}
           className="p-4 border-t border-white/5 bg-black/20 flex items-center gap-3"
         >
-
           <input
             type="text"
             value={newMessage}
-            onChange={(e) =>
-              setNewMessage(e.target.value)
-            }
+            onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Motivate your squad..."
             disabled={sending}
             maxLength={1000}
             className="flex-1 bg-zinc-900/60 border border-white/10 rounded-2xl px-4 py-3 text-xs text-zinc-200 focus:outline-none focus:border-orange-500/50 transition-colors placeholder:text-zinc-600 disabled:opacity-50"
           />
-
           <button
             type="submit"
-            disabled={
-              sending ||
-              !newMessage.trim()
-            }
+            disabled={sending || !newMessage.trim()}
             className="p-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-950 rounded-2xl transition-colors shadow-lg flex items-center justify-center"
           >
-
             <Send className="w-4 h-4" />
-
           </button>
-
         </form>
       </div>
     </div>
