@@ -19,7 +19,7 @@ import {
 interface Note {
   id: string;
   title: string;
-  content: string; // Now stores HTML instead of raw text
+  content: string;
   updatedAt: number;
 }
 
@@ -29,7 +29,6 @@ export default function NotesWidget() {
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Reference for our custom rich text editor
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Load notes from local storage on mount
@@ -44,7 +43,7 @@ export default function NotesWidget() {
         id: Date.now().toString(),
         title: "Micro-Commitments",
         content:
-          "Break your deep work session into smaller, manageable tasks here...",
+          "<ul><li>Read Chapter 4</li><li>Complete 10 Physics problems</li></ul>",
         updatedAt: Date.now(),
       };
       setNotes([defaultNote]);
@@ -63,14 +62,14 @@ export default function NotesWidget() {
 
   const activeNote = notes.find((n) => n.id === activeNoteId);
 
-  // Sync the editor content when switching notes
+  // 🚨 FIXED: Sync the editor content when switching notes OR opening the modal
   useEffect(() => {
     if (editorRef.current && activeNote) {
       if (editorRef.current.innerHTML !== activeNote.content) {
         editorRef.current.innerHTML = activeNote.content;
       }
     }
-  }, [activeNoteId]);
+  }, [activeNoteId, isOpen]); // <-- Adding 'isOpen' here prevents the wiping bug!
 
   const handleAddNote = () => {
     const newNote: Note = {
@@ -106,13 +105,11 @@ export default function NotesWidget() {
   // --------------------------------------------------------
   const executeCommand = (command: string, value?: string) => {
     document.execCommand(command, false, value);
-    // Force an update to React state after the native DOM command runs
     if (editorRef.current) {
       handleUpdateNote("content", editorRef.current.innerHTML);
     }
   };
 
-  // Helper to strip HTML for word/character counts
   const stripHtml = (html: string) => {
     const tmp = document.createElement("DIV");
     tmp.innerHTML = html;
@@ -222,7 +219,7 @@ export default function NotesWidget() {
                   className="bg-white/5 border border-white/10 rounded-lg text-xs px-2 py-1 outline-none text-zinc-300 cursor-pointer"
                   onChange={(e) => {
                     executeCommand("formatBlock", e.target.value);
-                    e.target.value = "P"; // Reset select back to default visually
+                    e.target.value = "P";
                   }}
                   defaultValue="P"
                 >
@@ -233,7 +230,6 @@ export default function NotesWidget() {
 
                 <div className="w-px h-4 bg-white/10" />
 
-                {/* Note: using onMouseDown + preventDefault stops the editor from losing focus! */}
                 <div className="flex items-center gap-3">
                   <Bold
                     className="w-3.5 h-3.5 hover:text-white cursor-pointer"
@@ -289,7 +285,7 @@ export default function NotesWidget() {
                     className="bg-transparent text-3xl font-bold text-zinc-100 placeholder-zinc-700 outline-none mb-4"
                   />
 
-                  {/* The actual Rich Text Editor */}
+                  {/* 🚨 REMOVED PLACEHOLDER TEXT DIV ENTIRELY 🚨 */}
                   <div
                     ref={editorRef}
                     contentEditable
@@ -299,11 +295,6 @@ export default function NotesWidget() {
                     }
                     className="flex-1 bg-transparent text-zinc-300 outline-none overflow-y-auto custom-scrollbar leading-relaxed text-sm [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold"
                   />
-                  {!activeNote.content && (
-                    <div className="absolute top-[120px] left-6 text-zinc-700 text-sm pointer-events-none">
-                      Start typing your notes here...
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center text-zinc-600 text-sm">
