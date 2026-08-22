@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Send, Clock, Sparkles, MessageSquare } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
 
 interface SquadRoomProps {
   groupId: string;
@@ -223,7 +224,7 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
       if (error) throw error;
     } catch (error: any) {
       console.error("Send message error:", error);
-      alert("🚨 Message failed to send: " + error.message);
+      toast.error("🚨 Message failed to send: " + error.message);
       setNewMessage(text);
     } finally {
       setSending(false);

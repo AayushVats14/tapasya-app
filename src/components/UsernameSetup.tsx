@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { User, Sparkles, ArrowRight, GraduationCap } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
 
 interface UsernameSetupProps {
   userId: string;
@@ -18,8 +19,7 @@ export default function UsernameSetup({
   const [otherExam, setOtherExam] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const finalExam =
-    targetExam === "OTHER" ? otherExam.trim() : targetExam;
+  const finalExam = targetExam === "OTHER" ? otherExam.trim() : targetExam;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +37,9 @@ export default function UsernameSetup({
 
       if (error) {
         if (error.code === "23505") {
-          alert("That username is already taken. Please choose another one.");
+          toast.error(
+            "That username is already taken. Please choose another one.",
+          );
           return;
         }
 
@@ -46,7 +48,7 @@ export default function UsernameSetup({
 
       onComplete(username.trim());
     } catch (error: any) {
-      alert(`Failed to save profile: ${error.message}`);
+      toast.error(`Failed to save profile: ${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -56,7 +58,6 @@ export default function UsernameSetup({
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
       <div className="w-full max-w-md bg-[#0c0d12] border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
         <div className="p-8">
-
           {/* Icon */}
           <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center text-orange-400 mb-6 border border-orange-500/20">
             <Sparkles className="w-6 h-6" />
@@ -73,7 +74,6 @@ export default function UsernameSetup({
           </p>
 
           <form onSubmit={handleSave} className="space-y-6">
-
             {/* Username */}
             <div>
               <label className="block text-xs text-zinc-500 mb-2 ml-1">
@@ -106,7 +106,6 @@ export default function UsernameSetup({
               </label>
 
               <div className="grid grid-cols-3 gap-3">
-
                 {/* JEE */}
                 <button
                   type="button"
@@ -122,9 +121,7 @@ export default function UsernameSetup({
                 >
                   <GraduationCap className="w-5 h-5 mb-2" />
 
-                  <div className="font-medium text-sm">
-                    JEE
-                  </div>
+                  <div className="font-medium text-sm">JEE</div>
 
                   <div className="text-[11px] text-zinc-600 mt-1">
                     Engineering
@@ -146,13 +143,9 @@ export default function UsernameSetup({
                 >
                   <GraduationCap className="w-5 h-5 mb-2" />
 
-                  <div className="font-medium text-sm">
-                    NEET
-                  </div>
+                  <div className="font-medium text-sm">NEET</div>
 
-                  <div className="text-[11px] text-zinc-600 mt-1">
-                    Medical
-                  </div>
+                  <div className="text-[11px] text-zinc-600 mt-1">Medical</div>
                 </button>
 
                 {/* OTHER */}
@@ -167,15 +160,10 @@ export default function UsernameSetup({
                 >
                   <GraduationCap className="w-5 h-5 mb-2" />
 
-                  <div className="font-medium text-sm">
-                    Other
-                  </div>
+                  <div className="font-medium text-sm">Other</div>
 
-                  <div className="text-[11px] text-zinc-600 mt-1">
-                    My exam
-                  </div>
+                  <div className="text-[11px] text-zinc-600 mt-1">My exam</div>
                 </button>
-
               </div>
             </div>
 
@@ -201,11 +189,7 @@ export default function UsernameSetup({
             {/* Submit */}
             <button
               type="submit"
-              disabled={
-                saving ||
-                !username.trim() ||
-                !finalExam
-              }
+              disabled={saving || !username.trim() || !finalExam}
               className="w-full py-4 rounded-2xl text-sm font-bold bg-orange-500 hover:bg-orange-600 text-zinc-950 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(249,115,22,0.15)] hover:shadow-[0_0_25px_rgba(249,115,22,0.3)]"
             >
               {saving ? (
@@ -217,7 +201,6 @@ export default function UsernameSetup({
                 </>
               )}
             </button>
-
           </form>
         </div>
       </div>

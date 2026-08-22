@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Music, X, Minus, MonitorPlay, Play } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
 
 export default function MusicPlayer() {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,7 +17,8 @@ export default function MusicPlayer() {
     if (!inputValue.trim()) return;
 
     // Regex to extract the 11-character YouTube video ID
-    const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+    const regExp =
+      /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
     const match = inputValue.match(regExp);
 
     if (match && match[7].length === 11) {
@@ -24,7 +26,7 @@ export default function MusicPlayer() {
       setInputValue("");
       setIsMinimized(false); // Auto-expand when a new video is loaded
     } else {
-      alert("Please enter a valid YouTube link.");
+      toast.error("Please enter a valid YouTube link.");
     }
   };
 
@@ -35,32 +37,38 @@ export default function MusicPlayer() {
 
   return (
     <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start gap-3">
-      
       {/* The Expanded / Minimized Player Widget */}
       {isOpen && (
-        <div className={`bg-[#0c0d12]/95 backdrop-blur-2xl border border-white/10 shadow-2xl transition-all duration-300 animate-in slide-in-from-bottom-4 fade-in ${
-          isMinimized ? "w-64 rounded-full p-2.5" : "w-80 rounded-3xl p-4"
-        }`}>
-          
+        <div
+          className={`bg-[#0c0d12]/95 backdrop-blur-2xl border border-white/10 shadow-2xl transition-all duration-300 animate-in slide-in-from-bottom-4 fade-in ${
+            isMinimized ? "w-64 rounded-full p-2.5" : "w-80 rounded-3xl p-4"
+          }`}
+        >
           {/* Header Row */}
-          <div className={`flex items-center justify-between ${isMinimized ? "" : "mb-3"}`}>
+          <div
+            className={`flex items-center justify-between ${isMinimized ? "" : "mb-3"}`}
+          >
             <div className="flex items-center gap-2 text-zinc-100 font-medium text-sm pl-2">
-              <MonitorPlay className="w-4 h-4 text-orange-500" /> 
+              <MonitorPlay className="w-4 h-4 text-orange-500" />
               {isMinimized ? "Playing Ambient..." : "Focus Ambient"}
             </div>
-            
+
             <div className="flex items-center gap-1">
               {/* Minimize/Maximize Toggle */}
-              <button 
+              <button
                 onClick={() => setIsMinimized(!isMinimized)}
                 className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/5 rounded-full transition-colors"
                 title={isMinimized ? "Expand Player" : "Minimize Player"}
               >
-                {isMinimized ? <Music className="w-3.5 h-3.5" /> : <Minus className="w-4 h-4" />}
+                {isMinimized ? (
+                  <Music className="w-3.5 h-3.5" />
+                ) : (
+                  <Minus className="w-4 h-4" />
+                )}
               </button>
-              
+
               {/* Close Button */}
-              <button 
+              <button
                 onClick={closePlayer}
                 className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-white/5 rounded-full transition-colors"
                 title="Close"
@@ -71,7 +79,13 @@ export default function MusicPlayer() {
           </div>
 
           {/* Form & Video (Hidden via CSS when minimized so music keeps playing) */}
-          <div className={isMinimized ? "hidden" : "block animate-in fade-in zoom-in-95 duration-200"}>
+          <div
+            className={
+              isMinimized
+                ? "hidden"
+                : "block animate-in fade-in zoom-in-95 duration-200"
+            }
+          >
             {/* URL Input Form */}
             <form onSubmit={handleUpdateUrl} className="flex gap-2 mb-3">
               <input
@@ -103,7 +117,6 @@ export default function MusicPlayer() {
               ></iframe>
             </div>
           </div>
-
         </div>
       )}
 
@@ -117,7 +130,6 @@ export default function MusicPlayer() {
           <Music className="w-5 h-5" />
         </button>
       )}
-
     </div>
   );
 }

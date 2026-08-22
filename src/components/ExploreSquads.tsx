@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Users, Plus, Search } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
 
 // 1. Accept onJoinSuccess as a prop
 export default function ExploreSquads({
@@ -46,7 +47,7 @@ export default function ExploreSquads({
       .eq("group_id", groupId);
 
     if (count && count >= maxMembers) {
-      alert("Sorry, this squad just filled up!");
+      toast.error("Sorry, this squad just filled up!");
       return;
     }
 
@@ -56,12 +57,12 @@ export default function ExploreSquads({
 
     if (error) {
       if (error.code === "23505") {
-        alert("You are already in this squad!");
+        toast.success("You are already in this squad!");
       } else {
         console.error("Error joining squad:", error.message);
       }
     } else {
-      alert("Welcome to the squad! 🔥");
+      toast.success("Welcome to the squad! 🔥");
 
       // 2. Also update their legacy group_id field if your app uses it for quick lookups
       await supabase

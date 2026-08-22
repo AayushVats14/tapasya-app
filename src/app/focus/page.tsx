@@ -9,7 +9,7 @@ import { supabase } from "../../lib/supabase";
 import TapasyaTimer from "../../components/Timer";
 import Sankalp from "../../components/Sankalp";
 import Leaderboard from "../../components/Leaderboard";
-import UsernameSetup from "../../components/UsernameSetup";
+import toast, { Toaster } from "react-hot-toast";
 
 import {
   Users,
@@ -135,7 +135,7 @@ export default function FocusPage() {
       setEditName(editName.trim());
       setIsProfileModalOpen(false);
     } else {
-      alert("Failed to update profile.");
+      toast.error("Failed to update profile.");
     }
   };
 
@@ -149,7 +149,7 @@ export default function FocusPage() {
     if (input && !isNaN(Number(input))) {
       const hours = Number(input);
       if (hours <= 0) {
-        alert("Please enter a target greater than 0.");
+        toast.error("Please enter a target greater than 0.");
         return;
       }
       const newTarget = hours * 3600;
@@ -176,7 +176,7 @@ export default function FocusPage() {
       setEditName(finalName);
       setNeedsUsername(false);
     } catch (err: any) {
-      alert("Error saving username: " + err.message);
+      toast.error("Error saving username: " + err.message);
     } finally {
       setIsSavingName(false);
     }
