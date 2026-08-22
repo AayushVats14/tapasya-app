@@ -28,6 +28,9 @@ export default function NotesWidget() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>(
+    {},
+  );
 
   const editorRef = useRef<HTMLDivElement>(null);
 
@@ -103,8 +106,32 @@ export default function NotesWidget() {
   // --------------------------------------------------------
   // RICH TEXT COMMANDS
   // --------------------------------------------------------
+  const checkFormats = () => {
+    setActiveFormats({
+      bold: document.queryCommandState("bold"),
+      italic: document.queryCommandState("italic"),
+      underline: document.queryCommandState("underline"),
+      insertUnorderedList: document.queryCommandState("insertUnorderedList"),
+      insertOrderedList: document.queryCommandState("insertOrderedList"),
+    });
+  };
+
   const executeCommand = (command: string, value?: string) => {
+    // 1. Force focus so the click actually registers in the text box
+    if (editorRef.current && document.activeElement !== editorRef.current) {
+      editorRef.current.focus();
+    }
+
+    // 2. Execute the native formatting command
     document.execCommand(command, false, value);
+
+    // 3. INSTANT UI UPDATE: Force the button color to change right now, ignoring browser delays
+    setActiveFormats((prev) => ({
+      ...prev,
+      [command]: !prev[command],
+    }));
+
+    // 4. Save the content
     if (editorRef.current) {
       handleUpdateNote("content", editorRef.current.innerHTML);
     }
@@ -232,21 +259,21 @@ export default function NotesWidget() {
 
                 <div className="flex items-center gap-3">
                   <Bold
-                    className="w-3.5 h-3.5 hover:text-white cursor-pointer"
+                    className={`w-3.5 h-3.5 cursor-pointer transition-colors ${activeFormats.bold ? "text-emerald-400" : "hover:text-white"}`}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       executeCommand("bold");
                     }}
                   />
                   <Italic
-                    className="w-3.5 h-3.5 hover:text-white cursor-pointer"
+                    className={`w-3.5 h-3.5 cursor-pointer transition-colors ${activeFormats.italic ? "text-emerald-400" : "hover:text-white"}`}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       executeCommand("italic");
                     }}
                   />
                   <Underline
-                    className="w-3.5 h-3.5 hover:text-white cursor-pointer"
+                    className={`w-3.5 h-3.5 cursor-pointer transition-colors ${activeFormats.underline ? "text-emerald-400" : "hover:text-white"}`}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       executeCommand("underline");
@@ -258,14 +285,14 @@ export default function NotesWidget() {
 
                 <div className="flex items-center gap-3">
                   <List
-                    className="w-3.5 h-3.5 hover:text-white cursor-pointer"
+                    className={`w-3.5 h-3.5 cursor-pointer transition-colors ${activeFormats.insertUnorderedList ? "text-emerald-400" : "hover:text-white"}`}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       executeCommand("insertUnorderedList");
                     }}
                   />
                   <ListOrdered
-                    className="w-3.5 h-3.5 hover:text-white cursor-pointer"
+                    className={`w-3.5 h-3.5 cursor-pointer transition-colors ${activeFormats.insertOrderedList ? "text-emerald-400" : "hover:text-white"}`}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       executeCommand("insertOrderedList");
@@ -293,6 +320,8 @@ export default function NotesWidget() {
                     onInput={(e) =>
                       handleUpdateNote("content", e.currentTarget.innerHTML)
                     }
+                    onKeyUp={checkFormats}
+                    onMouseUp={checkFormats}
                     className="flex-1 bg-transparent text-zinc-300 outline-none overflow-y-auto custom-scrollbar leading-relaxed text-sm [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold"
                   />
                 </div>
