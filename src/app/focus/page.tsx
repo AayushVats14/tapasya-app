@@ -24,6 +24,8 @@ import {
   User,
   ChevronRight,
   Camera,
+  Sparkles,
+  ArrowRight, // Added for Onboarding
 } from "lucide-react";
 
 interface NudgeNotification {
@@ -35,12 +37,16 @@ interface NudgeNotification {
 export default function FocusPage() {
   const router = useRouter();
 
+  // --- CORE APP STATES ---
   const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(true);
 
   // Username setup gate
+  // --- GATEKEEPER STATES (The Hard Block) ---
   const [needsUsername, setNeedsUsername] = useState(false);
+  const [setupName, setSetupName] = useState("");
+  const [isSavingName, setIsSavingName] = useState(false);
 
   const [isZenMode, setIsZenMode] = useState(false);
   const [nudges, setNudges] = useState<NudgeNotification[]>([]);
@@ -63,9 +69,15 @@ export default function FocusPage() {
   // GET CURRENT USER
   // --------------------------------------------------
 
+  // 1. INITIAL LOAD & GATEKEEPER CHECK
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) {
+    const initApp = async () => {
+      // Grab session reliably
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
         router.push("/");
         return;
       }
@@ -73,17 +85,25 @@ export default function FocusPage() {
       setUserId(user.id);
 
       // Check username
+
+      const currentUid = session.user.id;
+      setUserId(currentUid);
+
+      // Check database safely for new users using maybeSingle()
       const { data: profile } = await supabase
         .from("aspirants")
         .select("display_name")
-        .eq("id", user.id)
+        .eq("id", currentUid)
         .maybeSingle();
 
+      // THE ULTIMATE BLOCK: If no row exists, or name is empty, block them!
       if (
-        profile &&
-        profile.display_name &&
-        profile.display_name.trim() !== ""
+        !profile ||
+        !profile.display_name ||
+        profile.display_name.trim() === ""
       ) {
+        setNeedsUsername(true);
+      } else {
         setUserName(profile.display_name);
         setEditName(profile.display_name);
       } else {
@@ -92,8 +112,10 @@ export default function FocusPage() {
       }
 
       setCheckingUsername(false);
-      fetchTodayProgress(user.id);
-    });
+      fetchTodayProgress(currentUid);
+    };
+
+    initApp();
 
     const savedTarget = localStorage.getItem("tapasya_daily_target");
 
@@ -136,7 +158,7 @@ export default function FocusPage() {
   // --------------------------------------------------
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || needsUsername) return; // Don't run background stuff if blocked
 
     const fetchNudges = async () => {
       const { data } = await supabase
@@ -209,7 +231,7 @@ export default function FocusPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, needsUsername]);
 
   // --------------------------------------------------
   // DISMISS NUDGE
@@ -247,6 +269,10 @@ export default function FocusPage() {
     if (!error) {
       setUserName(editName.trim());
       setEditName(editName.trim());
+      .upsert({ id: userId, display_name: editName.trim() });
+
+    if (!error) {
+      setUserName(editName.trim());
       setIsProfileModalOpen(false);
     } else {
       alert("Failed to update profile.");
@@ -287,6 +313,30 @@ export default function FocusPage() {
   // --------------------------------------------------
   // TIME FORMAT
   // --------------------------------------------------
+  // --- SUBMIT NEW USERNAME FUNCTION ---
+  const handleCompleteSetup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!setupName.trim() || !userId) return;
+
+    setIsSavingName(true);
+    const finalName = setupName.trim();
+
+    try {
+      const { error } = await supabase
+        .from("aspirants")
+        .upsert({ id: userId, display_name: finalName });
+
+      if (error) throw error;
+
+      setUserName(finalName);
+      setEditName(finalName);
+      setNeedsUsername(false); // <--- UNLOCKS THE APP!
+    } catch (err: any) {
+      alert("Error saving username: " + err.message);
+    } finally {
+      setIsSavingName(false);
+    }
+  };
 
   const formatTodayTime = (totalSecs: number) => {
     const h = Math.floor(totalSecs / 3600);
@@ -312,6 +362,7 @@ export default function FocusPage() {
   // LOADING
   // --------------------------------------------------
 
+  // --- STATE 1: LOADING ---
   if (checkingUsername) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 text-xs tracking-widest uppercase animate-pulse">
@@ -324,6 +375,62 @@ export default function FocusPage() {
   // MAIN UI
   // --------------------------------------------------
 
+  // --- STATE 2: THE HARD BLOCK (Forced Onboarding) ---
+  if (needsUsername) {
+    return (
+      <main className="min-h-screen bg-zinc-950 flex items-center justify-center p-4 relative overflow-hidden">
+        {/* Glows */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-orange-600/10 rounded-full blur-[140px] pointer-events-none" />
+
+        <div className="w-full max-w-md bg-[#0c0d12]/90 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden relative z-10 animate-in zoom-in-95 duration-500">
+          <div className="p-8">
+            <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center text-orange-400 mb-6 border border-orange-500/20">
+              <Sparkles className="w-6 h-6" />
+            </div>
+
+            <h2 className="text-2xl font-light text-zinc-100 mb-2">
+              Claim your identity.
+            </h2>
+            <p className="text-zinc-500 text-sm mb-8 leading-relaxed">
+              What should your squad call you? This will appear on the global
+              leaderboard and inside your live study rooms.
+            </p>
+
+            <form onSubmit={handleCompleteSetup} className="space-y-6">
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+                <input
+                  type="text"
+                  required
+                  maxLength={20}
+                  value={setupName}
+                  onChange={(e) => setSetupName(e.target.value)}
+                  placeholder="Enter your display name..."
+                  className="w-full bg-zinc-900/80 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-zinc-200 focus:outline-none focus:border-orange-500/50 transition-all shadow-inner placeholder:text-zinc-600"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSavingName || !setupName.trim()}
+                className="w-full py-4 rounded-2xl text-sm font-bold bg-orange-500 hover:bg-orange-600 text-zinc-950 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(249,115,22,0.15)] hover:shadow-[0_0_25px_rgba(249,115,22,0.3)]"
+              >
+                {isSavingName ? (
+                  <div className="w-5 h-5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    Lock it in <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // --- STATE 3: THE ACTUAL APP (Only renders if unlocked!) ---
   return (
     <main className="min-h-screen bg-zinc-950 flex flex-col items-center p-4 sm:p-6 md:p-10 selection:bg-zinc-800 relative overflow-x-hidden transition-all duration-700">
 
@@ -356,6 +463,7 @@ export default function FocusPage() {
 
       {/* TOP NAVIGATION */}
 
+      {/* Top Navigation Header */}
       {!isZenMode && (
         <nav className="w-full max-w-5xl flex justify-between items-center mb-6 relative z-30 transition-all duration-500">
 

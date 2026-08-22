@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Gift,
 } from "lucide-react";
+import { Send, Clock, Sparkles, MessageSquare, Gift } from "lucide-react";
 
 interface SquadRoomProps {
   groupId: string;
@@ -116,6 +117,42 @@ export default function SquadRoom({
         const currentMember = memberRows.find(
           (member) => member.user_id === userId,
         );
+      const { data: profiles } = await supabase
+        .from("aspirants")
+        .select("id, display_name")
+        .in("id", userIds);
+
+      if (!profiles) return;
+
+      const now = new Date();
+      const startOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      ).toISOString();
+
+      const enhancedMembers: Member[] = await Promise.all(
+        profiles.map(async (p) => {
+          const { data: sessions } = await supabase
+            .from("sessions")
+            .select("duration_seconds, created_at")
+            .eq("user_id", p.id)
+            .gte("created_at", startOfDay);
+
+          const todayTotal = (sessions || []).reduce(
+            (acc, curr) => acc + (curr.duration_seconds || 0),
+            0,
+          );
+
+          return {
+            id: p.id,
+            display_name: p.display_name || "Aspirant",
+            is_studying: false,
+            current_session_seconds: 0,
+            today_total_seconds: todayTotal,
+          };
+        }),
+      );
 
         if (currentMember?.joined_at) {
           setJoinedAt(currentMember.joined_at);
@@ -244,6 +281,35 @@ export default function SquadRoom({
             message: msg.message,
             created_at: msg.created_at,
           }),
+  useEffect(() => {
+    const fetchMessages = async () => {
+      const { data } = await supabase
+        .from("squad_messages")
+        .select("*")
+        .eq("group_id", groupId)
+        .order("created_at", { ascending: true })
+        .limit(50);
+
+      if (data) {
+        const formatted = await Promise.all(
+          data.map(async (msg: any) => {
+            let senderName = msg.display_name;
+            if (!senderName) {
+              const { data: profile } = await supabase
+                .from("aspirants")
+                .select("display_name")
+                .eq("id", msg.user_id)
+                .single();
+              senderName = profile?.display_name || "Aspirant";
+            }
+            return {
+              id: msg.id,
+              user_id: msg.user_id,
+              sender_name: senderName,
+              message: msg.message,
+              created_at: msg.created_at,
+            };
+          }),
         );
 
         setMessages(formattedMessages);
@@ -305,6 +371,24 @@ export default function SquadRoom({
 
             return [...previous, incoming];
           });
+        async (payload) => {
+          let senderName = payload.new.display_name;
+          if (!senderName) {
+            const { data: profile } = await supabase
+              .from("aspirants")
+              .select("display_name")
+              .eq("id", payload.new.user_id)
+              .single();
+            senderName = profile?.display_name || "Aspirant";
+          }
+          const incoming: Message = {
+            id: payload.new.id,
+            user_id: payload.new.user_id,
+            sender_name: senderName,
+            message: payload.new.message,
+            created_at: payload.new.created_at,
+          };
+          setMessages((prev) => [...prev, incoming]);
         },
       )
       .subscribe((status) => {
@@ -384,6 +468,19 @@ export default function SquadRoom({
       setNewMessage(text);
     } finally {
       setSending(false);
+    const currentUser = members.find((m) => m.id === userId);
+    const myDisplayName = currentUser?.display_name || "Aspirant";
+
+    const { error } = await supabase.from("squad_messages").insert({
+      group_id: groupId,
+      user_id: userId,
+      message: text,
+      display_name: myDisplayName,
+    });
+
+    if (error) {
+      alert("🚨 Message failed to send: " + error.message);
+      setNewMessage(text);
     }
   };
 
@@ -432,6 +529,7 @@ export default function SquadRoom({
           LEFT COLUMN
       ====================================================== */}
 
+      {/* LEFT COLUMN: LIVE PRESENCE & TIMERS */}
       <div className="md:col-span-5 bg-black/40 border-r border-white/5 flex flex-col p-6 overflow-hidden">
 
         {/* HEADER */}
@@ -450,6 +548,9 @@ export default function SquadRoom({
             {members.length} members
           </span>
 
+          <span className="text-xs font-mono text-zinc-500">
+            {members.length} members
+          </span>
         </div>
 
         {/* MEMBERS */}
@@ -548,8 +649,55 @@ export default function SquadRoom({
 
                   </div>
 
+          {members.map((member) => (
+            <div
+              key={member.id}
+              className="p-4 bg-zinc-950/60 rounded-2xl border border-white/5 flex items-center justify-between shadow-inner"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-xs">
+                  {member.display_name.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-zinc-200 truncate max-w-[120px]">
+                    {member.display_name}
+                  </h4>
+                  <p className="text-[10px] font-mono text-zinc-500">
+                    Today: {Math.floor(member.today_total_seconds / 3600)}h{" "}
+                    {Math.floor((member.today_total_seconds % 3600) / 60)}m
+                  </p>
                 </div>
 
+              <div className="flex flex-col items-end gap-1.5">
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-mono tracking-wide bg-zinc-900 text-zinc-400 border border-white/5 flex items-center gap-1.5">
+                  <Clock className="w-3 h-3 text-orange-400" />
+                  {formatTime(member.today_total_seconds)}
+                </span>
+
+                {/* 🚨 NEW: IN-ROOM NUDGE BUTTON 🚨 */}
+                {member.id !== userId && (
+                  <button
+                    onClick={async () => {
+                      const { error } = await supabase
+                        .from("squad_nudges")
+                        .insert({
+                          sender_id: userId,
+                          receiver_id: member.id,
+                        });
+                      if (!error) {
+                        alert(
+                          `⚡ Sent a focus boost to @${member.display_name}!`,
+                        );
+                      } else {
+                        alert("Failed to send nudge: " + error.message);
+                      }
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-orange-500 hover:text-zinc-950 text-zinc-400 rounded-lg text-[10px] font-medium transition-colors border border-white/10 hover:border-transparent"
+                    title="Send a Focus Boost"
+                  >
+                    <Gift className="w-3 h-3" /> Nudge
+                  </button>
+                )}
               </div>
             );
           })}
@@ -585,6 +733,9 @@ export default function SquadRoom({
             Real-time
           </span>
 
+          <span className="text-[11px] text-zinc-500 font-mono">
+            Encrypted & Real-time
+          </span>
         </div>
 
         {/* ====================================================
@@ -628,6 +779,8 @@ export default function SquadRoom({
 
                   {/* NAME */}
 
+                  className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
+                >
                   <span className="text-[10px] font-mono text-zinc-500 mb-1 px-1">
                     {isMe
                       ? "You"
@@ -698,7 +851,6 @@ export default function SquadRoom({
           </button>
 
         </form>
-
       </div>
     </div>
   );
