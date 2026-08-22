@@ -424,6 +424,8 @@ export default function SquadRoom({ groupId, userId }: SquadRoomProps) {
                           ? "Sending..."
                           : "Nudge"}
 
+                        <Bell className="w-3 h-3" />
+                        {nudgeSending === member.id ? "Sending..." : "Nudge"}
                       </button>
                     )}
 
